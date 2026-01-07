@@ -1,0 +1,30 @@
+{
+  "name": "discord-dictionary-bot",
+  "version": "1.0.0",
+  "description": "discordの会話を豊かなものにしよう",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Reossann/discord-dictionary-bot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/Reossann/discord-dictionary-bot/issues"
+  },
+  "homepage": "https://github.com/Reossann/discord-dictionary-bot#readme",
+  "dependencies": {
+    "discord.js": "^14.25.1",
+    "dotenv": "^17.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^25.0.3",
+    "nodemon": "^3.1.11",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
