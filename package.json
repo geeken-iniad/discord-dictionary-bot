@@ -4,7 +4,9 @@
   "description": "discordの会話を豊かなものにしよう",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev": "nodemon src/index.ts",
+    "start": "ts-node src/index.ts", 
+    "postinstall": "prisma generate"
   },
   "repository": {
     "type": "git",
