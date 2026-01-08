@@ -37,6 +37,18 @@ const commands = [
        .setDescription('辞書から単語を削除します')
        .addStringOption(option => option.setName('word').setDescription('削除する単語').setRequired(true)),
 
+    new SlashCommandBuilder()
+        .setName('update')
+        .setDescription('辞書の意味を書き換えます')
+        .addStringOption(option =>
+            option.setName('word')
+                .setDescription('書き換えたい単語')
+                .setRequired(true))
+        .addStringOption(option =>
+            option.setName('meaning')
+                .setDescription('新しい意味')
+                .setRequired(true)),
+                
 ].map(command => command.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(token);
