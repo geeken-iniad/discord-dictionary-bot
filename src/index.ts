@@ -167,30 +167,47 @@ client.on(Events.InteractionCreate, async (interaction) => {
 // 4. メッセージ監視 (解説スレッド作成)
 // ---------------------------------------------------------
 client.on(Events.MessageCreate, async (message) => {
+    // Bot自身の発言は無視
     if (message.author.bot) return;
 
+    // データベースから全単語を取得
     const allWords = await prisma.word.findMany();
 
-    for (const data of allWords) {
-        if (message.content.includes(data.term)) {
-            try {
-                const thread = await message.startThread({
-                    name: `解説: ${data.term}`,
-                    autoArchiveDuration: 60,
-                });
-                
-                const embed = new EmbedBuilder()
-                    .setColor(Colors.Blue)
-                    .setTitle(`📚 ${data.term} の解説`)
-                    .setDescription(data.meaning)
-                    .setFooter({ text: '💡 質問があればチャットしてね' });
+    // 【変更点1】含まれている単語を「全部」見つけてリストにする
+    const hitWords = allWords.filter(data => message.content.includes(data.term));
 
-                await thread.send({ embeds: [embed] });
-                return; 
-            } catch (error) {
-                // エラー無視
-            }
+    // 1つも見つからなければここで終了
+    if (hitWords.length === 0) return;
+
+    try {
+        // 【変更点2】スレッド名は、見つかった単語をカンマ区切りで並べる
+        // (長すぎるとエラーになるので、最大50文字くらいで切る処理を入れています)
+        const titleTerms = hitWords.map(w => w.term).join(', ');
+        const threadName = `解説: ${titleTerms}`.substring(0, 90); 
+
+        // スレッドを1つだけ作成
+        const thread = await message.startThread({
+            name: threadName,
+            autoArchiveDuration: 60,
+        });
+
+        // 【変更点3】見つかった単語の数だけループして、カードを投稿する
+        for (const word of hitWords) {
+            const embed = new EmbedBuilder()
+                .setColor(Colors.Blue)
+                .setTitle(`📚 ${word.term} の解説`)
+                .setDescription(word.meaning)
+                .setFooter({ text: '💡 複数の単語を検知しました' });
+
+            // スレッド内に送信
+            await thread.send({ embeds: [embed] });
         }
+
+        console.log(`反応しました: ${titleTerms}`);
+
+    } catch (error) {
+        // スレッドが既にあったり、権限がない場合のエラー対策
+        console.error('スレッド作成エラー:', error);
     }
 });
 
