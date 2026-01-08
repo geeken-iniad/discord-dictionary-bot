@@ -4,9 +4,10 @@
   "description": "discordの会話を豊かなものにしよう",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon src/index.ts",
-    "build": "tsc",                       
-    "start": "node dist/index.js",        
+    "dev": "nodemon src/index.ts", 
+    "register": "ts-node src/deploy-commands.ts",
+    "build": "tsc",
+    "start": "npx prisma db push && node dist/deploy-commands.js && node dist/index.js", 
     "postinstall": "prisma generate"
   },
   "repository": {
