@@ -17,6 +17,7 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
             data: {
                 term: term,
                 meaning: meaning,
+                authorName: interaction.user.username,
             },
         });
 

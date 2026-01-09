@@ -15,4 +15,5 @@ model Word {
   id      Int    @id @default(autoincrement()) // 通し番号
   term    String @unique                       // 単語（重複禁止）
   meaning String                               // 意味
+  authorName String?
 }

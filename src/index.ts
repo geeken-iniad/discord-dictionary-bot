@@ -9,6 +9,7 @@ import { handleMessage } from './events/messageHandler';
 
 dotenv.config();
 
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
