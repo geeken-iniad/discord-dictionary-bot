@@ -1,16 +1,12 @@
+// src/index.ts
 import { Client, Events, GatewayIntentBits, Interaction } from 'discord.js';
 import dotenv from 'dotenv';
 
-// 作ったファイルを読み込む
-import { addCommand } from './commands/add';
-import { listCommand } from './commands/list';
-import { deleteCommand } from './commands/delete';
+// ✨ 作ったバレルファイルをインポート（commandsの中身が全部入っています）
+import * as commands from './commands';
 import { handleMessage } from './events/messageHandler';
-import { updateCommand } from './commands/update';
-import { searchCommand } from './commands/search';
 
 dotenv.config();
-
 
 const client = new Client({
     intents: [
@@ -22,32 +18,48 @@ const client = new Client({
 
 client.once(Events.ClientReady, (c) => {
     console.log(`準備OK！ ${c.user.tag} が起動しました。`);
+    console.log(`コマンド同期完了: /add, /list, /delete, /update, /search が使えます`);
 });
 
-// ▼ コマンド処理の分岐がこれだけで済む！
+// ▼ 【重要】コマンド名と関数の「対応表（Map）」を作ります
+// これが if文の代わりになります
+const commandMap: { [key: string]: (interaction: any) => Promise<void> } = {
+    'add': commands.addCommand,
+    'list': commands.listCommand,
+    'delete': commands.deleteCommand,
+    'update': commands.updateCommand,
+    'search': commands.searchCommand,
+};
+
 client.on(Events.InteractionCreate, async (interaction: Interaction) => {
     if (!interaction.isChatInputCommand()) return;
 
     const { commandName } = interaction;
+    
+    // ▼ 対応表から、コマンド名に一致する関数を探す
+    const command = commandMap[commandName];
 
-    if (commandName === 'add') {
-        await addCommand(interaction);
-    } else if (commandName === 'list') {
-        await listCommand(interaction);
-    } else if (commandName === 'delete'){
-        await deleteCommand(interaction);
-    } else if (commandName === 'update') { 
-        await updateCommand(interaction);
-    } else if (commandName === 'search') {
-        await searchCommand(interaction);
+    // もし対応する関数があれば実行する
+    if (command) {
+        try {
+            await command(interaction);
+        } catch (error) {
+            console.error(error);
+            // エラー処理を一括管理
+            if (interaction.replied || interaction.deferred) {
+                await interaction.followUp({ content: '❌ エラーが発生しました', ephemeral: true });
+            } else {
+                await interaction.reply({ content: '❌ エラーが発生しました', ephemeral: true });
+            }
+        }
+    } else {
+        console.error(`コマンド ${commandName} は見つかりませんでした。`);
     }
 });
 
-// ▼ 辞書機能も1行で呼び出すだけ！
+// メッセージ辞書機能
 client.on(Events.MessageCreate, async (message) => {
     await handleMessage(message);
 });
 
 client.login(process.env.DISCORD_TOKEN);
-
-//updateの検証
