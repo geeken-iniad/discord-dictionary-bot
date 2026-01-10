@@ -49,6 +49,14 @@ const commands = [
             option.setName('meaning')
                 .setDescription('新しい意味')
                 .setRequired(true)),
+    
+    new SlashCommandBuilder()
+        .setName('search')
+        .setDescription('単語を検索します')
+        .addStringOption(option =>
+            option.setName('keyword')  // ここで名前を決めている
+                .setDescription('検索したい文字')
+                .setRequired(true)),
                 
 ].map(command => command.toJSON());
 

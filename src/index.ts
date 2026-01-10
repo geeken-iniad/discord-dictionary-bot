@@ -7,6 +7,7 @@ import { listCommand } from './commands/list';
 import { deleteCommand } from './commands/delete';
 import { handleMessage } from './events/messageHandler';
 import { updateCommand } from './commands/update';
+import { searchCommand } from './commands/search';
 
 dotenv.config();
 
@@ -35,8 +36,10 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
         await listCommand(interaction);
     } else if (commandName === 'delete'){
         await deleteCommand(interaction);
-    } else if (commandName === 'update') { // 👈 ここに追加！
+    } else if (commandName === 'update') { 
         await updateCommand(interaction);
+    } else if (commandName === 'search') {
+        await searchCommand(interaction);
     }
 });
 
