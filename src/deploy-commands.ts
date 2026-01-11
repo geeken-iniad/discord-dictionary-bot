@@ -57,6 +57,10 @@ const commands = [
             option.setName('keyword')  // ここで名前を決めている
                 .setDescription('検索したい文字')
                 .setRequired(true)),
+
+    new SlashCommandBuilder()
+        .setName('quiz')
+        .setDescription('登録された単語からクイズを出します'),
                 
 ].map(command => command.toJSON());
 
