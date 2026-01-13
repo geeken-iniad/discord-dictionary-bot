@@ -47,6 +47,11 @@ export const handleMessage = async (message: Message) => {
                 .setDescription(word.meaning)
                 .setFooter({ text: '💡 連続での反応は1時間制限しています' });
 
+
+            if (word.imageUrl) {
+                embed.setImage(word.imageUrl);
+            }
+
             await thread.send({ embeds: [embed] });
             
             // 時間を記録

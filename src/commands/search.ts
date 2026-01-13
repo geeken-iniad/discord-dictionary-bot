@@ -34,7 +34,16 @@ export const searchCommand = async (interaction: ChatInputCommandInteraction) =>
             .setColor(Colors.Orange) // 検索結果はオレンジ色にしてみる
             .setTitle(`🔎 「${keyword}」の検索結果`)
             .setDescription(`${results.length} 件見つかりました！`)
-            .addFields(
+            
+            // 1. まず「1つ目の結果」を変数に入れる
+            const firstResult = results[0];
+
+            // 2. 「中身が存在する」かつ「画像URLを持っている」場合だけセットする
+            if (firstResult && firstResult.imageUrl) {
+                embed.setImage(firstResult.imageUrl);
+}
+            
+            embed.addFields(
                 results.map(word => ({
                     name: word.term,
                     // せっかくなので前回作った登録者名も表示しましょう

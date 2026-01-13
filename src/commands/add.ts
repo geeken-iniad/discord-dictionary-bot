@@ -5,11 +5,14 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
     // 1. ユーザーの入力を取得
     const term = interaction.options.getString('word');
     const meaning = interaction.options.getString('meaning');
+    const image = interaction.options.getAttachment('image');
 
     if (!term || !meaning) {
         await interaction.reply({ content: '❌ 入力が足りません！', ephemeral: true });
         return;
     }
+
+    await interaction.deferReply();
 
     try {
         // 2. データベースに保存
@@ -18,6 +21,7 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
                 term: term,
                 meaning: meaning,
                 authorName: interaction.user.username,
+                imageUrl: image ? image.url : null,
             },
         });
 

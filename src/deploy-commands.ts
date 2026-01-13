@@ -25,7 +25,11 @@ const commands = [
         .addStringOption(option =>
             option.setName('meaning')
                 .setDescription('意味')
-                .setRequired(true)),
+                .setRequired(true))
+        .addAttachmentOption(option => 
+            option.setName('image')
+                .setDescription('画像があれば添付してください')
+                .setRequired(false)),
 
     // /list
     new SlashCommandBuilder()
