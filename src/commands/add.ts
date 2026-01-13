@@ -1,21 +1,23 @@
 import { ChatInputCommandInteraction } from 'discord.js';
-import { prisma } from '../prismaClient'; // さっき作った道具箱を使う
+import { prisma } from '../prismaClient';
 
 export const addCommand = async (interaction: ChatInputCommandInteraction) => {
-    // 1. ユーザーの入力を取得
-    const term = interaction.options.getString('word');
-    const meaning = interaction.options.getString('meaning');
-    const image = interaction.options.getAttachment('image');
-
-    if (!term || !meaning) {
-        await interaction.reply({ content: '❌ 入力が足りません！', ephemeral: true });
-        return;
-    }
-
-    await interaction.deferReply();
-
     try {
-        // 2. データベースに保存
+        // 1. 先に「考え中...」にする (これでタイムアウトを防ぐ)
+        await interaction.deferReply();
+
+        const term = interaction.options.getString('term');
+        const meaning = interaction.options.getString('meaning');
+        const image = interaction.options.getAttachment('image');
+
+        // 入力チェック
+        if (!term || !meaning) {
+            // ⭕ deferした後なので editReply を使う
+            await interaction.editReply('❌ 単語と意味を入力してください。');
+            return;
+        }
+
+        // データベースに保存
         await prisma.word.create({
             data: {
                 term: term,
@@ -25,10 +27,13 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
             },
         });
 
-        // 3. 完了メッセージ
-        await interaction.reply({ content: `✅ **${term}** を辞書に登録しました！` });
+        // 成功メッセージ
+        // ⭕ ここも editReply
+        await interaction.editReply(`✅ **「${term}」** を登録しました！`);
+        
     } catch (error) {
         console.error(error);
-        await interaction.reply({ content: '❌ 保存中にエラーが発生しました。', ephemeral: true });
+        // エラー時も、すでに defer されているなら editReply
+        await interaction.editReply('❌ エラーが発生しました。');
     }
 };
