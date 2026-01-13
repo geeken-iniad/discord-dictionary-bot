@@ -52,7 +52,11 @@ const commands = [
         .addStringOption(option =>
             option.setName('meaning')
                 .setDescription('新しい意味')
-                .setRequired(true)),
+                .setRequired(true))
+        .addAttachmentOption(option => 
+            option.setName('image')
+                .setDescription('新しい画像があれば添付')
+                .setRequired(false)),
     
     new SlashCommandBuilder()
         .setName('search')
