@@ -12,9 +12,20 @@ datasource db {
 // ▼▼▼ ここを追加 ▼▼▼
 // "Word" という名前のテーブルを作ります
 model Word {
-  id      Int    @id @default(autoincrement()) // 通し番号
-  term    String @unique                       // 単語（重複禁止）
-  meaning String                               // 意味
+  id         Int      @id @default(autoincrement())
+  meaning    String
   authorName String?
   imageUrl   String?
+  createdAt  DateTime @default(now())
+  
+  // 👇 Wordは複数の Title を持つ、という設定
+  titles     Title[]
+}
+model Title {
+  id     Int    @id @default(autoincrement())
+  text   String @unique // 単語そのもの (重複禁止)
+  
+  // 👇 Wordテーブルと紐付ける設定
+  word   Word   @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  wordId Int
 }
