@@ -29,3 +29,6 @@ model Title {
   word   Word   @relation(fields: [wordId], references: [id], onDelete: Cascade)
   wordId Int
 }
+
+
+// 将来的には各々の単語をリンクさせる
