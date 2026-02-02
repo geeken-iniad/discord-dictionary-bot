@@ -49,3 +49,5 @@ export const updateCommand = async (interaction: ChatInputCommandInteraction) =>
         await interaction.editReply('❌ エラーが発生しました。');
     }
 };
+
+//commit 用
