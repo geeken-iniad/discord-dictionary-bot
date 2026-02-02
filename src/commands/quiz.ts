@@ -3,77 +3,71 @@ import { prisma } from '../prismaClient';
 
 export const quizCommand = async (interaction: ChatInputCommandInteraction) => {
     try {
-        await interaction.deferReply(); // 考え中...
+        await interaction.deferReply();
 
-        // 🎲 1. ランダムに1単語を取り出す技
-        // (Prismaには random() がないので、「全件数」を数えて、「適当な数だけスキップ」して取ります)
+        // 1. Word（意味データ）の総数をカウント
         const count = await prisma.word.count();
-        
         if (count === 0) {
-            await interaction.editReply('❌ まだ単語が登録されていません。まずは /add してください！');
+            await interaction.editReply('❌ まだ単語が登録されていません。');
             return;
         }
 
         const randomIndex = Math.floor(Math.random() * count);
+        
+        // ⭐️ 修正ポイント: titles（見出し語）も一緒に持ってくる
         const [word] = await prisma.word.findMany({
             take: 1,
             skip: randomIndex,
+            include: { titles: true } 
         });
 
         if (!word) {
-            await interaction.editReply('❌ 単語の取得に失敗しました。もう一度試してね。');
+            await interaction.editReply('❌ 取得エラー。もう一度試してください。');
             return;
         }
-        // 2. 問題を出題！
+
+        // 2. 出題
         const embed = new EmbedBuilder()
             .setColor(Colors.Gold)
             .setTitle('🧠 クイズ！この意味はなーんだ？')
             .setDescription(`**意味:**\n${word.meaning}`)
             .setFooter({ text: '15秒以内に単語をチャットで答えてね！' });
+        
+        if (word.imageUrl) embed.setImage(word.imageUrl);
 
         await interaction.editReply({ embeds: [embed] });
 
-        // 👂 3. 答えを待ち構える「コレクター」を設置
-        // filter: 「クイズを始めた本人」の「新しいメッセージ」だけを通すフィルター
+        // 3. 判定ロジック
         const filter = (m: Message) => m.author.id === interaction.user.id;
-        
         const channel = interaction.channel as TextChannel;
+        
+        const collector = channel.createMessageCollector({ filter, time: 15000, max: 1 });
 
-        if (!channel) {
-            await interaction.editReply('❌ チャンネル情報が取得できませんでした。');
-            return;
-        }
-
-        // interaction.channel ではなく、今定義した channel を使う
-        const collector = channel.createMessageCollector({ 
-            filter, 
-            time: 15000, 
-            max: 1 
-        });
-        if (!collector) return;
-
-        // 何か発言があった時の処理
         collector.on('collect', async (m: Message) => {
-            if (m.content.trim() === word.term) {
-                // 正解！
-                await m.reply(`🎉 **正解です！** お見事！`);
+            // ⭐️ 修正ポイント: 複数のタイトル(titles)のうち、どれか1つと一致すれば正解！
+            const isCorrect = word.titles.some(t => t.text === m.content.trim());
+
+            // 表示用にタイトルを全部つなげる (例: りんご / Apple)
+            const titleText = word.titles.map(t => t.text).join(' / ');
+
+            if (isCorrect) {
+                await m.reply(`🎉 **正解です！** (${titleText})`);
                 await m.react('⭕');
             } else {
-                // 不正解...
-                await m.reply(`😢 **残念...** 正解は **「${word.term}」** でした！`);
+                await m.reply(`😢 **残念...** 正解は **「${titleText}」** でした！`);
                 await m.react('❌');
             }
         });
 
-        // 時間切れの時の処理
         collector.on('end', (collected) => {
             if (collected.size === 0) {
-                interaction.followUp(`⏰ **時間切れ！** 正解は **「${word.term}」** でした。`);
+                const titleText = word.titles.map(t => t.text).join(' / ');
+                interaction.followUp(`⏰ **時間切れ！** 正解は **「${titleText}」** でした。`);
             }
         });
 
     } catch (error) {
         console.error(error);
-        await interaction.editReply('❌ クイズの準備中にエラーが発生しました。');
+        await interaction.editReply('❌ エラーが発生しました。');
     }
 };
