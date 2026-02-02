@@ -70,14 +70,30 @@ const commands = [
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN!);
 
+// src/deploy-commands.ts の後半部分
+
 (async () => {
     try {
         console.log('📦 コマンドの登録を開始します...');
+
+        // 1. グローバルコマンド（どこでも使えるやつ）を上書き登録
         await rest.put(
             Routes.applicationCommands(process.env.APPLICATION_ID!),
             { body: commands },
         );
-        console.log('✅ コマンド登録が完了しました！');
+        console.log('✅ グローバルコマンドの登録完了！');
+
+        // 👇 2. 【追加】古い「サーバー専用コマンド」があれば削除する
+        // (もし .env に GUILD_ID があれば実行)
+        if (process.env.GUILD_ID) {
+            console.log('🗑️ 古いサーバー専用コマンドを削除中...');
+            await rest.put(
+                Routes.applicationGuildCommands(process.env.APPLICATION_ID!, process.env.GUILD_ID),
+                { body: [] }, // 空っぽのリストを送って全消去
+            );
+            console.log('✨ サーバー専用コマンドを削除しました！');
+        }
+
     } catch (error) {
         console.error(error);
     }
