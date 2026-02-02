@@ -3,59 +3,56 @@ import { prisma } from '../prismaClient';
 
 export const searchCommand = async (interaction: ChatInputCommandInteraction) => {
     try {
-        await interaction.deferReply(); // 考え中...
+        await interaction.deferReply();
 
-        // 1. ユーザーが入力したキーワードを受け取る
-        // (deploy-commands.ts で 'keyword' という名前に設定します)
         const keyword = interaction.options.getString('keyword');
+        if (!keyword) return;
 
-        if (!keyword) {
-            await interaction.editReply('❌ キーワードを入力してください。');
-            return;
-        }
-
-        // 2. データベースから検索！ (ここが重要ポイント✨)
-        const results = await prisma.word.findMany({
+        // 1. Title（見出し語）の中から検索する
+        // "contains" なので、部分一致でヒットします
+        const matchedTitles = await prisma.title.findMany({
             where: {
-                term: {
-                    contains: keyword, // 「この文字を含んでいる」ものを探す
-                },
+                text: { contains: keyword }
             },
+            include: { word: true } // 親の「意味」も持ってくる
         });
 
-        // 3. 結果が0件だった場合の処理
-        if (results.length === 0) {
-            await interaction.editReply(`🔎 **「${keyword}」** に一致する単語は見つかりませんでした。`);
+        if (matchedTitles.length === 0) {
+            await interaction.editReply(`❌ **「${keyword}」** に一致する単語は見つかりませんでした。`);
             return;
         }
 
-        // 4. 見つかった結果を表示
         const embed = new EmbedBuilder()
-            .setColor(Colors.Orange) // 検索結果はオレンジ色にしてみる
+            .setColor(Colors.Orange)
             .setTitle(`🔎 「${keyword}」の検索結果`)
-            .setDescription(`${results.length} 件見つかりました！`)
-            
-            // 1. まず「1つ目の結果」を変数に入れる
-            const firstResult = results[0];
+            .setDescription(`${matchedTitles.length} 件ヒットしました`);
 
-            // 2. 「中身が存在する」かつ「画像URLを持っている」場合だけセットする
-            if (firstResult && firstResult.imageUrl) {
-                embed.setImage(firstResult.imageUrl);
-}
+        // 2. ヒットしたものを表示
+        // 重複除去（同じ意味の別名が両方ヒットした場合）は簡易的にやってます
+        const displayedWordIds = new Set();
+
+        matchedTitles.slice(0, 5).forEach(title => {
+            if (displayedWordIds.has(title.wordId)) return;
+            displayedWordIds.add(title.wordId);
+
+            const word = title.word;
             
-            embed.addFields(
-                results.map(word => ({
-                    name: word.term,
-                    // せっかくなので前回作った登録者名も表示しましょう
-                    value: `${word.meaning}\n*(by ${word.authorName ?? '不明'})*`,
-                    inline: false,
-                }))
-            );
+            // 画像があればセット（最初の1枚だけ）
+            if (!embed.data.image && word.imageUrl) {
+                embed.setImage(word.imageUrl);
+            }
+
+            embed.addFields({
+                name: `📌 ${title.text}`, // ヒットした名前
+                value: word.meaning,
+                inline: false,
+            });
+        });
 
         await interaction.editReply({ embeds: [embed] });
 
     } catch (error) {
         console.error(error);
-        await interaction.editReply('❌ 検索中にエラーが発生しました。');
+        await interaction.editReply('❌ エラーが発生しました。');
     }
 };

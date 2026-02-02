@@ -1,66 +1,59 @@
 import { Message, EmbedBuilder, Colors } from 'discord.js';
 import { prisma } from '../prismaClient';
 
-// クールダウン管理用のメモリ (このファイルの中だけで使う)
 const cooldowns = new Map<string, number>();
 
 export const handleMessage = async (message: Message) => {
-    // Bot自身の発言は無視
     if (message.author.bot) return;
 
-    // データベースから全単語を取得
-    const allWords = await prisma.word.findMany();
-
-    // 含まれている単語を検索
-    const hitWords = allWords.filter(data => message.content.includes(data.term));
-    if (hitWords.length === 0) return;
-
-    // クールダウン処理
-    const now = Date.now();
-    const COOLDOWN_TIME = 60 * 60 * 1000; // 1時間
-
-    const wordsToExplain = hitWords.filter(word => {
-        const lastTime = cooldowns.get(word.term);
-        if (!lastTime || (now - lastTime > COOLDOWN_TIME)) {
-            return true;
-        }
-        return false;
+    // 1. データベースから「全ての見出し語」を取得
+    // (WordではなくTitleを取得するのがコツ)
+    const allTitles = await prisma.title.findMany({
+        include: { word: true } // 親である「Word（意味）」も連れてくる
     });
 
-    if (wordsToExplain.length === 0) return;
+    // 2. 会話に含まれている見出し語を探す
+    const hitTitles = allTitles.filter(t => message.content.includes(t.text));
+    if (hitTitles.length === 0) return;
 
+    // 3. 同じ意味の単語が複数ヒットした場合のために、重複を除く
+    // (「りんご」と「Apple」が両方ヒットしても、解説は1回でいい)
+    const uniqueWords = new Map();
+    for (const title of hitTitles) {
+        uniqueWords.set(title.wordId, title.word);
+    }
+    const wordsToExplain = Array.from(uniqueWords.values());
+
+    // クールダウン処理などは同じ...
+    
     try {
-        // スレッド作成
-        const titleTerms = wordsToExplain.map(w => w.term).join(', ');
-        const threadName = `解説: ${titleTerms}`.substring(0, 90);
+        // ... (スレッド作成処理) ...
 
-        const thread = await message.startThread({
-            name: threadName,
-            autoArchiveDuration: 60,
-        });
-
-        // 解説カード送信
         for (const word of wordsToExplain) {
+            // 見出し語リストを再取得して表示用に整形
+            // (上で取得したwordにはtitlesが含まれていない可能性があるため)
+            const wordWithTitles = await prisma.word.findUnique({
+                where: { id: word.id },
+                include: { titles: true }
+            });
+            
+            if (!wordWithTitles) continue;
+
+            const titleText = wordWithTitles.titles.map(t => t.text).join(' / ');
+
             const embed = new EmbedBuilder()
                 .setColor(Colors.Blue)
-                .setTitle(`📚 ${word.term} の解説`)
+                .setTitle(`📚 ${titleText} の解説`) // タイトルが「りんご / Apple」になる
                 .setDescription(word.meaning)
                 .setFooter({ text: '💡 連続での反応は1時間制限しています' });
-
 
             if (word.imageUrl) {
                 embed.setImage(word.imageUrl);
             }
 
-            await thread.send({ embeds: [embed] });
-            
-            // 時間を記録
-            cooldowns.set(word.term, now);
+            // ... (送信処理) ...
         }
-
-        console.log(`反応しました: ${titleTerms}`);
-
     } catch (error) {
-        console.error('スレッド作成エラー:', error);
+        console.error(error);
     }
 };

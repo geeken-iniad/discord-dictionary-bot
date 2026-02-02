@@ -5,12 +5,11 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "postgresql" // ※SQLiteの場合は "sqlite" のままにしてください
   url      = env("DATABASE_URL")
 }
 
-// ▼▼▼ ここを追加 ▼▼▼
-// "Word" という名前のテーブルを作ります
+// 1. 「意味」や「画像」を持つ本体
 model Word {
   id         Int      @id @default(autoincrement())
   meaning    String
@@ -21,6 +20,8 @@ model Word {
   // 👇 Wordは複数の Title を持つ、という設定
   titles     Title[]
 }
+
+// 2. 「見出し語」専用のテーブル
 model Title {
   id     Int    @id @default(autoincrement())
   text   String @unique // 単語そのもの (重複禁止)
@@ -29,6 +30,3 @@ model Title {
   word   Word   @relation(fields: [wordId], references: [id], onDelete: Cascade)
   wordId Int
 }
-
-
-// 将来的には各々の単語をリンクさせる => /で区切っていく
