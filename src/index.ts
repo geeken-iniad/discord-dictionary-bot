@@ -37,7 +37,7 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
 
     const { commandName } = interaction;
     
-    // ▼ 対応表から、コマンド名に一致する関数を探す
+    // ▼ 対応表から、コマンド名に一致する関数を探す 
     const command = commandMap[commandName];
 
     // もし対応する関数があれば実行する
