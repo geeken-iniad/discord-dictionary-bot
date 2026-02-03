@@ -4,6 +4,15 @@ import { prisma } from '../prismaClient';
 // クールダウン管理用
 const cooldowns = new Map<string, number>();
 
+// 🪄 魔法の関数: 文字を「小文字」かつ「カタカナ」に統一する
+function normalize(str: string): string {
+    return str
+        // 1. ひらがな → カタカナ 変換
+        .replace(/[\u3041-\u3096]/g, match => String.fromCharCode(match.charCodeAt(0) + 0x60))
+        // 2. 英語の大文字 → 小文字 変換
+        .toLowerCase();
+}
+
 export const handleMessage = async (message: Message) => {
     if (message.author.bot) return;
 
@@ -12,8 +21,15 @@ export const handleMessage = async (message: Message) => {
         include: { word: true }
     });
 
-    // 2. 会話に含まれている見出し語を探す
-    const hitTitles = allTitles.filter(t => message.content.includes(t.text));
+    // メッセージの内容を「正規化」する (例: "Apple" -> "apple", "りんご" -> "リンゴ")
+    const normalizedContent = normalize(message.content);
+
+    // 2. 正規化した状態でマッチングチェック
+    const hitTitles = allTitles.filter(t => {
+        // 登録されている単語も「正規化」して比較する！
+        return normalizedContent.includes(normalize(t.text));
+    });
+
     if (hitTitles.length === 0) return;
 
     // 3. 重複除去
@@ -28,7 +44,6 @@ export const handleMessage = async (message: Message) => {
     const COOLDOWN_TIME = 60 * 60 * 1000; // 1時間
     
     const validWords = wordsToExplain.filter(word => {
-        // IDを使ってクールダウン管理
         const key = `word_${word.id}`; 
         const lastTime = cooldowns.get(key);
         if (!lastTime || (now - lastTime > COOLDOWN_TIME)) {
@@ -40,21 +55,18 @@ export const handleMessage = async (message: Message) => {
     if (validWords.length === 0) return;
 
     try {
-        // データを再取得（titlesを含めるため）
+        // データを再取得
         const wordWithTitles = await Promise.all(validWords.map(w => 
             prisma.word.findUnique({ where: { id: w.id }, include: { titles: true } })
         ));
 
-        // ⭐️ 修正ポイント: nullを除外してから処理する
-        // (以前はここで w?.titles[0].text と書いてエラーになっていました)
         const validResults = wordWithTitles.filter(w => w !== null);
-
         if (validResults.length === 0) return;
 
         // タイトルをつなげてスレッド名にする
         const titleTerms = validResults
-            .map(w => w!.titles[0]?.text) // 1つ目の名前を取得
-            .filter(t => t) // 万が一名前がない場合は除外
+            .map(w => w!.titles[0]?.text)
+            .filter(t => t)
             .join(', ');
 
         const thread = await message.startThread({
@@ -64,7 +76,6 @@ export const handleMessage = async (message: Message) => {
 
         // 解説カード送信
         for (const word of validResults) {
-            // ここでは filter済みなので word は null ではないですが、念のため
             if (!word) continue;
 
             const titleText = word.titles.map(t => t.text).join(' / ');
@@ -81,10 +92,8 @@ export const handleMessage = async (message: Message) => {
 
             await thread.send({ embeds: [embed] });
             
-            // 時間を記録
             cooldowns.set(`word_${word.id}`, now);
         }
-
         console.log(`反応しました: ${titleTerms}`);
 
     } catch (error) {
