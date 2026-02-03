@@ -7,18 +7,18 @@ const commands = [
     // /add
     new SlashCommandBuilder()
         .setName('add')
-        .setDescription('新しい単語を辞書に追加します')
+        .setDescription('単語を登録します（"単語=意味 | 単語=意味" で一括登録も可）')
         .addStringOption(option =>
-            option.setName('word') // 👈 'word' に統一
-                .setDescription('単語 (スラッシュ / で区切って複数登録可)')
+            option.setName('word')
+                .setDescription('単語 (通常: "りんご/Apple" / 一括: "A=意味 | B=意味")')
                 .setRequired(true))
         .addStringOption(option =>
             option.setName('meaning')
-                .setDescription('意味')
-                .setRequired(true))
+                .setDescription('意味 (一括登録の場合は空欄でOK)')
+                .setRequired(false)) // 👈 ここを false に変更！
         .addAttachmentOption(option => 
             option.setName('image')
-                .setDescription('画像があれば添付してください')
+                .setDescription('画像 (一括登録時は最初の単語にのみ適用されます)')
                 .setRequired(false)),
 
     // /list
