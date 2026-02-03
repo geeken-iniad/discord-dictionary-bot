@@ -5,9 +5,11 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql" // ※SQLiteの場合は "sqlite" のままにしてください
+  provider = "sqlite" // ※SQLiteの場合は "sqlite" のままにしてくださいpostgresql
   url      = env("DATABASE_URL")
 }
+
+
 
 // 1. 「意味」や「画像」を持つ本体
 model Word {

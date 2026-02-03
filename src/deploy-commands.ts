@@ -38,18 +38,22 @@ const commands = [
     // /update
     new SlashCommandBuilder()
         .setName('update')
-        .setDescription('単語の意味を書き換えます')
+        .setDescription('単語の情報を更新したり、別名を追加したりします')
         .addStringOption(option =>
-            option.setName('word') // 👈 'word' に統一
-                .setDescription('書き換える単語')
+            option.setName('word')
+                .setDescription('対象の単語（今登録されている名前）')
                 .setRequired(true))
+        .addStringOption(option =>
+            option.setName('add_title') // 👈 新機能！
+                .setDescription('追加したい別名 (スラッシュ / で複数可)')
+                .setRequired(false))
         .addStringOption(option =>
             option.setName('meaning')
-                .setDescription('新しい意味')
-                .setRequired(true))
+                .setDescription('新しい意味 (変更しない場合は空欄でOK)') // 👈 任意に変更
+                .setRequired(false))
         .addAttachmentOption(option => 
             option.setName('image')
-                .setDescription('新しい画像があれば添付')
+                .setDescription('新しい画像')
                 .setRequired(false)),
     
     // /search
