@@ -1,44 +1,131 @@
-import { ChatInputCommandInteraction } from 'discord.js';
+import { 
+    ChatInputCommandInteraction, 
+    ActionRowBuilder, 
+    StringSelectMenuBuilder, 
+    StringSelectMenuOptionBuilder, 
+    ComponentType,
+    EmbedBuilder,
+    Colors
+} from 'discord.js';
 import { prisma } from '../prismaClient';
 
 export const deleteCommand = async (interaction: ChatInputCommandInteraction) => {
     try {
-        await interaction.deferReply();
+        // メニューを出すので、自分にしか見えないようにする (ephemeral: true)
+        await interaction.deferReply({ ephemeral: true });
 
-        const targetText = interaction.options.getString('word'); // 名前を search ではなく word に統一した場合は注意
-
+        const targetText = interaction.options.getString('word');
         if (!targetText) return;
 
-        // 1. その「名前(Title)」を探す
-        const targetTitle = await prisma.title.findUnique({
+        // 1. 入力された単語から、親(Word)と兄弟(Titles)を全部探す
+        const targetTitle = await prisma.title.findFirst({
             where: { text: targetText },
-            include: { word: true } // どの単語に属しているか確認するため
+            include: { 
+                word: {
+                    include: { titles: true } // 兄弟たちも持ってくる
+                } 
+            }
         });
 
         if (!targetTitle) {
-            await interaction.editReply(`❌ **「${targetText}」** という単語は見つかりませんでした。`);
+            await interaction.editReply(`❌ **「${targetText}」** は登録されていません。`);
             return;
         }
 
-        // 2. 削除実行
-        await prisma.title.delete({
-            where: { id: targetTitle.id }
+        const word = targetTitle.word;
+        const allTitles = word.titles;
+
+        // 2. セレクトメニューの選択肢を作る
+        const selectMenu = new StringSelectMenuBuilder()
+            .setCustomId('deleteSelect')
+            .setPlaceholder('削除する項目を選択してください...');
+
+        // A. 個別の名前（エイリアス）を消す選択肢
+        allTitles.forEach(t => {
+            selectMenu.addOptions(
+                new StringSelectMenuOptionBuilder()
+                    .setLabel(`別名削除: ${t.text}`)
+                    .setDescription(t.text === targetText ? '👈 今回入力された単語' : '登録されている別名')
+                    .setValue(`delete_title_${t.id}`)
+                    .setEmoji('🗑️')
+            );
         });
 
-        // 3. 親のWordに、まだ他の名前が残っているか確認（おまけ機能）
-        const remainingTitles = await prisma.title.count({
-            where: { wordId: targetTitle.wordId }
+        // B. 本体ごと全部消す選択肢
+        selectMenu.addOptions(
+            new StringSelectMenuOptionBuilder()
+                .setLabel('💥 全削除 (意味データごと消す)')
+                .setDescription('解説も、全ての別名も、全部消えます')
+                .setValue(`delete_word_${word.id}`)
+                .setEmoji('🧨')
+        );
+
+        const row = new ActionRowBuilder<StringSelectMenuBuilder>()
+            .addComponents(selectMenu);
+
+        const embed = new EmbedBuilder()
+            .setColor(Colors.Red)
+            .setTitle(`🗑️ 削除モード: ${targetText}`)
+            .setDescription(
+                `この解説には **${allTitles.length}個** の名前が登録されています。\n` +
+                `どれを削除しますか？下のメニューから選んでください。\n\n` +
+                `**意味:**\n${word.meaning.substring(0, 50)}...`
+            );
+
+        // 3. メニューを表示
+        const response = await interaction.editReply({
+            embeds: [embed],
+            components: [row]
         });
 
-        if (remainingTitles === 0) {
-             // 名前が0個になったので、本来はWordも消えます（自動連携）
-             await interaction.editReply(`🗑️ **「${targetText}」** を削除しました。（解説データも削除されました）`);
-        } else {
-             await interaction.editReply(`🗑️ **「${targetText}」** を削除しました。（この解説にはまだ別の名前が残っています）`);
-        }
+        // 4. ユーザーの選択を待つ (制限時間1分)
+        const collector = response.createMessageComponentCollector({ 
+            componentType: ComponentType.StringSelect, 
+            time: 60_000 
+        });
+
+        collector.on('collect', async (i) => {
+            // 👇 ここで念のためチェックを入れる
+            if (!i.values || i.values.length === 0) return;
+
+            const selection = i.values[0];
+
+            // 念のため selection があるか確認 (これでエラーが消えます)
+            if (!selection) return;
+
+            if (selection.startsWith('delete_title_')) {
+                // --- 個別削除モード ---
+                const titleId = parseInt(selection.replace('delete_title_', ''));
+                
+                await prisma.title.delete({ where: { id: titleId } });
+                
+                const remaining = await prisma.title.count({ where: { wordId: word.id } });
+
+                if (remaining === 0) {
+                    await i.update({ content: '✅ 最後の名前を削除したため、解説データも消去されました。', embeds: [], components: [] });
+                } else {
+                    await i.update({ content: '✅ 指定された名前（別名）を削除しました。解説データはまだ残っています。', embeds: [], components: [] });
+                }
+
+            } else if (selection.startsWith('delete_word_')) {
+                // --- 全削除モード ---
+                const wordId = parseInt(selection.replace('delete_word_', ''));
+                await prisma.word.delete({ where: { id: wordId } });
+                
+                await i.update({ content: '🧨 **ドカーン！** 解説データと全ての名前を完全に削除しました。', embeds: [], components: [] });
+            }
+        });
+
+        collector.on('end', async (collected) => {
+            if (collected.size === 0) {
+                // 時間切れならメニューを消す
+                await interaction.editReply({ content: '⏰ タイムアウトしました。', components: [] });
+            }
+        });
 
     } catch (error) {
         console.error(error);
-        await interaction.editReply('❌ 削除中にエラーが発生しました。');
+        // エラー時はメニューを消してエラー表示
+        await interaction.editReply({ content: '❌ エラーが発生しました。', components: [] }).catch(() => null);
     }
 };
