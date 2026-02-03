@@ -1,32 +1,36 @@
-import { Message, EmbedBuilder, Colors } from 'discord.js';
+import { 
+    Message, 
+    EmbedBuilder, 
+    Colors,
+    // 👇 TextBasedChannel の代わりに、具体的な型をインポートします
+    TextChannel,
+    ThreadChannel,
+    DMChannel
+} from 'discord.js';
 import { prisma } from '../prismaClient';
 
 // クールダウン管理用
 const cooldowns = new Map<string, number>();
 
-// 🪄 魔法の関数: 文字を「小文字」かつ「カタカナ」に統一する
+// 🪄 魔法の関数
 function normalize(str: string): string {
     return str
-        // 1. ひらがな → カタカナ 変換
         .replace(/[\u3041-\u3096]/g, match => String.fromCharCode(match.charCodeAt(0) + 0x60))
-        // 2. 英語の大文字 → 小文字 変換
         .toLowerCase();
 }
 
 export const handleMessage = async (message: Message) => {
     if (message.author.bot) return;
 
-    // 1. データベースから「全ての見出し語」を取得
+    // 1. データベースから取得
     const allTitles = await prisma.title.findMany({
         include: { word: true }
     });
 
-    // メッセージの内容を「正規化」する (例: "Apple" -> "apple", "りんご" -> "リンゴ")
     const normalizedContent = normalize(message.content);
 
-    // 2. 正規化した状態でマッチングチェック
+    // 2. マッチング
     const hitTitles = allTitles.filter(t => {
-        // 登録されている単語も「正規化」して比較する！
         return normalizedContent.includes(normalize(t.text));
     });
 
@@ -41,7 +45,7 @@ export const handleMessage = async (message: Message) => {
 
     // 4. クールダウン処理
     const now = Date.now();
-    const COOLDOWN_TIME = 60 * 60 * 1000; // 1時間
+    const COOLDOWN_TIME = 60 * 60 * 1000;
     
     const validWords = wordsToExplain.filter(word => {
         const key = `word_${word.id}`; 
@@ -55,29 +59,41 @@ export const handleMessage = async (message: Message) => {
     if (validWords.length === 0) return;
 
     try {
-        // データを再取得
         const wordWithTitles = await Promise.all(validWords.map(w => 
             prisma.word.findUnique({ where: { id: w.id }, include: { titles: true } })
         ));
 
-        const validResults = wordWithTitles.filter(w => w !== null);
+        // flatMapでnull除去
+        const validResults = wordWithTitles.flatMap(w => w ? [w] : []);
+        
         if (validResults.length === 0) return;
 
-        // タイトルをつなげてスレッド名にする
-        const titleTerms = validResults
-            .map(w => w!.titles[0]?.text)
-            .filter(t => t)
-            .join(', ');
+        // 📝 分岐処理
+        const isThreadAlready = message.channel.isThread();
+        const isDM = !message.inGuild();
 
-        const thread = await message.startThread({
-            name: `解説: ${titleTerms}`.substring(0, 90),
-            autoArchiveDuration: 60,
-        });
+        // 📝 修正ポイント: 送信可能なチャンネルの型を並べて指定します
+        let targetChannel: TextChannel | ThreadChannel | DMChannel; 
+
+        if (isThreadAlready || isDM) {
+            // TypeScriptに「これはTextChannelだと思っていいよ」と強制します
+            // (実際にはDMやThreadかもしれませんが、sendメソッドの使い方は同じなのでOKです)
+            targetChannel = message.channel as TextChannel;
+        } else {
+            const titleTerms = validResults
+                .map(w => w.titles[0]?.text)
+                .filter(t => t)
+                .join(', ');
+
+            // startThreadは ThreadChannel を返すのでそのまま代入できます
+            targetChannel = await message.startThread({
+                name: `解説: ${titleTerms}`.substring(0, 90),
+                autoArchiveDuration: 60,
+            });
+        }
 
         // 解説カード送信
         for (const word of validResults) {
-            if (!word) continue;
-
             const titleText = word.titles.map(t => t.text).join(' / ');
             
             const embed = new EmbedBuilder()
@@ -90,13 +106,14 @@ export const handleMessage = async (message: Message) => {
                 embed.setImage(word.imageUrl);
             }
 
-            await thread.send({ embeds: [embed] });
+            await targetChannel.send({ embeds: [embed] });
             
             cooldowns.set(`word_${word.id}`, now);
         }
-        console.log(`反応しました: ${titleTerms}`);
+        
+        console.log(`反応しました (Thread: ${!isThreadAlready})`);
 
     } catch (error) {
-        console.error('スレッド作成エラー:', error);
+        console.error('メッセージ送信エラー:', error);
     }
 };
