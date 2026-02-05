@@ -106,6 +106,10 @@ export const handleMessage = async (message: Message) => {
                 embed.setImage(word.imageUrl);
             }
 
+            if (word.link) {
+                embed.setURL(word.link);
+            }
+
             await targetChannel.send({ embeds: [embed] });
             
             cooldowns.set(`word_${word.id}`, now);

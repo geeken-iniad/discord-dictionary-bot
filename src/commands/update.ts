@@ -86,19 +86,24 @@ export const updateCommand = async (interaction: ChatInputCommandInteraction) =>
         await submitted.deferReply(); // 送信ボタンを押した後なら待機中を出せる
 
         const newMeaning = submitted.fields.getTextInputValue('meaningInput');
+        const newLink = submitted.fields.getTextInputValue('linkInput');
         const newTitlesStr = submitted.fields.getTextInputValue('addTitleInput');
         const messages: string[] = [];
 
         // 意味の更新
-        if (newMeaning !== currentWord.meaning || newImage) {
+        if (newMeaning !== currentWord.meaning || newImage || newLink !== (currentWord.link || '')) {
             const updateData: any = { meaning: newMeaning };
+            
             if (newImage) updateData.imageUrl = newImage.url;
+            
+            // リンクの更新 (空文字なら null にする処理)
+            updateData.link = newLink ? newLink : null; 
 
             await prisma.word.update({
                 where: { id: currentWord.id },
                 data: updateData
             });
-            messages.push('✅ 解説文(または画像)を更新しました');
+            messages.push('✅ 本体情報を更新しました');
         }
 
         // 別名の追加
