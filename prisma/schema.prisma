@@ -17,9 +17,9 @@ model Word {
   meaning    String
   authorName String?
   imageUrl   String?
+  link       String?  // 👈 これを追加！ (?をつけるのを忘れずに)
   createdAt  DateTime @default(now())
   
-  // 👇 Wordは複数の Title を持つ、という設定
   titles     Title[]
 }
 

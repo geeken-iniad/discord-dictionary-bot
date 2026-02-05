@@ -7,18 +7,22 @@ const commands = [
     // /add
     new SlashCommandBuilder()
         .setName('add')
-        .setDescription('単語を登録します（"単語=意味 | 単語=意味" で一括登録も可）')
+        .setDescription('単語を登録します')
         .addStringOption(option =>
             option.setName('word')
                 .setDescription('単語 (通常: "りんご/Apple" / 一括: "A=意味 | B=意味")')
                 .setRequired(true))
         .addStringOption(option =>
             option.setName('meaning')
-                .setDescription('意味 (一括登録の場合は空欄でOK)')
-                .setRequired(false)) // 👈 ここを false に変更！
+                .setDescription('意味 (一括登録の場合は空欄)')
+                .setRequired(false))
+        .addStringOption(option =>  // 👈 追加
+            option.setName('link')
+                .setDescription('参考リンク (URL)')
+                .setRequired(false))
         .addAttachmentOption(option => 
             option.setName('image')
-                .setDescription('画像 (一括登録時は最初の単語にのみ適用されます)')
+                .setDescription('画像')
                 .setRequired(false)),
 
     // /list
@@ -38,14 +42,14 @@ const commands = [
     // /update
     new SlashCommandBuilder()
         .setName('update')
-        .setDescription('編集フォームを開いて、単語の意味や別名を更新します')
+        .setDescription('編集フォームを開いて更新します')
         .addStringOption(option =>
             option.setName('word')
                 .setDescription('編集したい単語')
                 .setRequired(true))
         .addAttachmentOption(option => 
             option.setName('image')
-                .setDescription('新しい画像にする場合のみ添付')
+                .setDescription('新しい画像')
                 .setRequired(false)),
     
     // /search

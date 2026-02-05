@@ -46,6 +46,13 @@ export const updateCommand = async (interaction: ChatInputCommandInteraction) =>
             .setValue(currentWord.meaning) // 👈 これがやりたかった機能！
             .setRequired(true);
 
+        const linkInput = new TextInputBuilder() // 👈 追加
+            .setCustomId('linkInput')
+            .setLabel("参考リンク (URL)")
+            .setStyle(TextInputStyle.Short)
+            .setValue(currentWord.link || '') // 登録済みなら表示、なければ空
+            .setRequired(false);
+
         const addTitleInput = new TextInputBuilder()
             .setCustomId('addTitleInput')
             .setLabel("別名を追加 (スラッシュ区切り)")
@@ -56,6 +63,7 @@ export const updateCommand = async (interaction: ChatInputCommandInteraction) =>
         // コンポーネントを配置
         const row1 = new ActionRowBuilder<TextInputBuilder>().addComponents(meaningInput);
         const row2 = new ActionRowBuilder<TextInputBuilder>().addComponents(addTitleInput);
+        const row3 = new ActionRowBuilder<TextInputBuilder>().addComponents(addTitleInput); // 3行目にずらす
         modal.addComponents(row1, row2);
 
         // 4. フォームを表示！
