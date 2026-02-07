@@ -30,6 +30,7 @@ const commandMap: { [key: string]: (interaction: any) => Promise<void> } = {
     'update': commands.updateCommand,
     'search': commands.searchCommand,
     'quiz': commands.quizCommand,
+    'introduction': commands.introductionCommand,
 };
 
 client.on(Events.InteractionCreate, async (interaction: Interaction) => {

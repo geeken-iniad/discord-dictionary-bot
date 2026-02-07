@@ -8,7 +8,8 @@ import {
     ComponentType 
 } from 'discord.js';
 import { prisma } from '../prismaClient';
-import { get } from 'fast-levenshtein'; // 👈 インストールしたライブラリ
+import * as Levenshtein from 'fast-levenshtein';
+const { get } = Levenshtein;
 
 export const searchCommand = async (interaction: ChatInputCommandInteraction) => {
     try {
