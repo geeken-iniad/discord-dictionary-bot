@@ -8,8 +8,15 @@ import {
     ComponentType 
 } from 'discord.js';
 import { prisma } from '../prismaClient';
-import * as Levenshtein from 'fast-levenshtein';
+import * as Levenshtein from 'fast-levenshtein'; // 👈 importの書き方を安全にしました
 const { get } = Levenshtein;
+
+// 🪄 魔法の関数: 文字を「小文字」かつ「カタカナ」に統一する
+function normalize(str: string): string {
+    return str
+        .replace(/[\u3041-\u3096]/g, match => String.fromCharCode(match.charCodeAt(0) + 0x60))
+        .toLowerCase();
+}
 
 export const searchCommand = async (interaction: ChatInputCommandInteraction) => {
     try {
@@ -18,13 +25,20 @@ export const searchCommand = async (interaction: ChatInputCommandInteraction) =>
         const keyword = interaction.options.getString('keyword');
         if (!keyword) return;
 
-        // 1. 通常の検索 (完全一致 or 部分一致)
-        const matchedTitles = await prisma.title.findMany({
-            where: { text: { contains: keyword } },
+        // 1. 全てのタイトルを取得する
+        // (ここで全部取ってきて、JS側で検索したほうが柔軟な検索ができます)
+        const allTitles = await prisma.title.findMany({
             include: { word: true }
         });
 
-        // ヒットしたらそのまま表示 (既存のロジック)
+        // 2. 正規化して検索 (完全一致 or 部分一致)
+        const normalizedKeyword = normalize(keyword);
+
+        const matchedTitles = allTitles.filter(t => {
+            return normalize(t.text).includes(normalizedKeyword);
+        });
+
+        // --- ヒットした場合 (そのまま表示) ---
         if (matchedTitles.length > 0) {
             const embed = new EmbedBuilder()
                 .setColor(Colors.Orange)
@@ -32,17 +46,21 @@ export const searchCommand = async (interaction: ChatInputCommandInteraction) =>
                 .setDescription(`${matchedTitles.length} 件ヒットしました`);
 
             const displayedWordIds = new Set();
+            
+            // 最初の5件だけ表示
             matchedTitles.slice(0, 5).forEach(title => {
                 if (displayedWordIds.has(title.wordId)) return;
                 displayedWordIds.add(title.wordId);
 
                 const word = title.word;
+                // 画像セット (最初の1枚だけ)
                 if (!embed.data.image && word.imageUrl) embed.setImage(word.imageUrl);
-                if (word.link && !embed.data.url) embed.setURL(word.link); // リンクがあればセット
+                // リンクセット (最初の1つだけ)
+                if (!embed.data.url && word.link) embed.setURL(word.link);
 
                 embed.addFields({
                     name: `📌 ${title.text}`,
-                    value: word.meaning,
+                    value: word.meaning.length > 100 ? word.meaning.substring(0, 97) + '...' : word.meaning,
                     inline: false,
                 });
             });
@@ -52,25 +70,19 @@ export const searchCommand = async (interaction: ChatInputCommandInteraction) =>
         }
 
         // ---------------------------------------------------------
-        // 🚀 ここから新機能：「もしかして」ロジック
+        // 🚀 もしかして検索 (ヒットしなかった場合)
         // ---------------------------------------------------------
 
-        // 2. 全てのタイトルを取得して比較する
-        const allTitles = await prisma.title.findMany();
-        
-        // 3. レーベンシュタイン距離を計算し、近い順に並べる
+        // 3. レーベンシュタイン距離を計算
         const candidates = allTitles
             .map(t => {
-                // 入力された文字(keyword)と、DBの単語(t.text)の距離を計算
-                // 大文字小文字は無視して比較するのがコツ！
                 const distance = get(keyword.toLowerCase(), t.text.toLowerCase());
                 return { ...t, distance };
             })
-            .filter(t => t.distance <= 3) // 👈 「距離3以内」のものだけ残す (数字は調整可)
-            .sort((a, b) => a.distance - b.distance) // 距離が近い順に並び替え
-            .slice(0, 3); // トップ3だけ採用
+            .filter(t => t.distance <= 3) // 3文字以内のミスなら許容
+            .sort((a, b) => a.distance - b.distance)
+            .slice(0, 3);
 
-        // 似ている単語すらなければ終了
         if (candidates.length === 0) {
             await interaction.editReply(`❌ **「${keyword}」** に一致する単語は見つかりませんでした。`);
             return;
@@ -82,8 +94,8 @@ export const searchCommand = async (interaction: ChatInputCommandInteraction) =>
         candidates.forEach(c => {
             row.addComponents(
                 new ButtonBuilder()
-                    .setCustomId(`fuzzy_${c.wordId}`) // IDをボタンに埋め込む
-                    .setLabel(`${c.text} ?`) // ボタンの文字
+                    .setCustomId(`fuzzy_${c.wordId}`)
+                    .setLabel(`${c.text} ?`)
                     .setStyle(ButtonStyle.Primary)
             );
         });
@@ -98,17 +110,15 @@ export const searchCommand = async (interaction: ChatInputCommandInteraction) =>
             components: [row] 
         });
 
-        // 5. ボタンが押されたら解説を表示する (制限時間30秒)
+        // 5. ボタン待機処理
         const collector = response.createMessageComponentCollector({ 
             componentType: ComponentType.Button, 
             time: 30000 
         });
 
         collector.on('collect', async (i) => {
-            // どのボタンが押されたか (fuzzy_123 から 123 を取り出す)
             const wordId = parseInt(i.customId.replace('fuzzy_', ''));
             
-            // その単語のデータを取得
             const word = await prisma.word.findUnique({
                 where: { id: wordId },
                 include: { titles: true }
@@ -119,28 +129,24 @@ export const searchCommand = async (interaction: ChatInputCommandInteraction) =>
                 return;
             }
 
-            // 解説を表示
             const titleText = word.titles.map(t => t.text).join(' / ');
             const resultEmbed = new EmbedBuilder()
                 .setColor(Colors.Blue)
-                .setTitle(`📚 ${titleText} の解説`) // ここが正解のタイトル
+                .setTitle(`📚 ${titleText} の解説`)
                 .setDescription(word.meaning);
 
             if (word.imageUrl) resultEmbed.setImage(word.imageUrl);
             if (word.link) resultEmbed.setURL(word.link);
 
-            // ボタンを押した人だけにこっそり見せるなら ephemeral: true
-            // 全員に見せるなら ephemeral: false
             await i.reply({ embeds: [resultEmbed], ephemeral: true });
         });
 
-        // 時間切れになったらボタンを無効化（グレーアウト）する処理
         collector.on('end', async () => {
             const disabledRow = new ActionRowBuilder<ButtonBuilder>();
             candidates.forEach(c => {
                 disabledRow.addComponents(
                     new ButtonBuilder()
-                        .setCustomId(`fuzzy_${c.wordId}`)
+                        .setCustomId(`disabled_${c.wordId}`) // IDは何でもいい
                         .setLabel(c.text)
                         .setStyle(ButtonStyle.Secondary)
                         .setDisabled(true)
