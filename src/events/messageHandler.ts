@@ -27,7 +27,13 @@ export const handleMessage = async (message: Message) => {
         include: { word: true }
     });
 
-    const normalizedContent = normalize(message.content);
+    const contentWithoutUrl = message.content.replace(/https?:\/\/[^\s]+/g, '');
+
+    // URLを消した結果、中身が空っぽになったら（＝URLだけの投稿なら）何もしない
+    if (!contentWithoutUrl.trim()) return;
+
+    // Botは「URLが消されたあとの文章」を正規化してチェックする
+    const normalizedContent = normalize(contentWithoutUrl);
 
     // 2. マッチング
     const hitTitles = allTitles.filter(t => {
