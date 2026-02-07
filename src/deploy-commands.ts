@@ -23,12 +23,19 @@ const commands = [
         .addAttachmentOption(option => 
             option.setName('image')
                 .setDescription('画像')
+                .setRequired(false))
+        .addStringOption(option =>   // 👈 追加
+            option.setName('tag')
+                .setDescription('タグ/カテゴリー (例: プログラミング, 料理)')
                 .setRequired(false)),
 
     // /list
     new SlashCommandBuilder()
         .setName('list')
-        .setDescription('登録された単語の一覧を表示します'),
+        .setDescription('登録された単語の一覧を表示します')
+        .addStringOption(option =>   // 👈 追加
+            option.setName('tag')
+                .setDescription('このタグが付いた単語だけを表示')),
 
     // /delete
     new SlashCommandBuilder()

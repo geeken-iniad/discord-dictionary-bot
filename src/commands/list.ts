@@ -4,6 +4,27 @@ import { prisma } from '../prismaClient';
 export const listCommand = async (interaction: ChatInputCommandInteraction) => {
     try {
         await interaction.deferReply();
+        const filterTag = interaction.options.getString('tag');
+
+        const whereClause = filterTag ? { tag: filterTag } : {};
+
+        const allTitles = await prisma.title.findMany({
+        where: {
+            word: whereClause // 👈 親(Word)のタグでフィルタリング
+        },
+        include: { word: true },
+        orderBy: { wordId: 'desc' }
+    });
+
+    if (allTitles.length === 0) {
+        // タグ指定があった場合となかった場合でメッセージを変える
+        const msg = filterTag 
+            ? `🏷️ タグ **「${filterTag}」** が付いた単語は見つかりませんでした。`
+            : '📭 辞書はまだ空っぽです。`/add` で追加してください！';
+        
+        await interaction.editReply(msg);
+        return;
+    }
 
         const allWords = await prisma.word.findMany({
             include: { titles: true },

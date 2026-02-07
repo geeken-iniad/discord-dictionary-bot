@@ -110,6 +110,10 @@ export const handleMessage = async (message: Message) => {
                 embed.setURL(word.link);
             }
 
+            if (word.tag) {
+                embed.setFooter({ text: `🏷️ ${word.tag} | 💡 連続での反応は1時間制限しています` });
+            }
+
             await targetChannel.send({ embeds: [embed] });
             
             cooldowns.set(`word_${word.id}`, now);

@@ -53,6 +53,13 @@ export const updateCommand = async (interaction: ChatInputCommandInteraction) =>
             .setValue(currentWord.link || '') // 登録済みなら表示、なければ空
             .setRequired(false);
 
+        const tagInput = new TextInputBuilder() // 👈 追加
+            .setCustomId('tagInput')
+            .setLabel("タグ (例: ゲーム, 勉強)")
+            .setStyle(TextInputStyle.Short)
+            .setValue(currentWord.tag || '') 
+            .setRequired(false);
+
         const addTitleInput = new TextInputBuilder()
             .setCustomId('addTitleInput')
             .setLabel("別名を追加 (スラッシュ区切り)")
@@ -63,8 +70,10 @@ export const updateCommand = async (interaction: ChatInputCommandInteraction) =>
         // コンポーネントを配置
         const row1 = new ActionRowBuilder<TextInputBuilder>().addComponents(meaningInput);
         const row2 = new ActionRowBuilder<TextInputBuilder>().addComponents(addTitleInput);
-        const row3 = new ActionRowBuilder<TextInputBuilder>().addComponents(addTitleInput); // 3行目にずらす
-        modal.addComponents(row1, row2);
+        const row3 = new ActionRowBuilder<TextInputBuilder>().addComponents(tagInput);
+        const row4 = new ActionRowBuilder<TextInputBuilder>().addComponents(addTitleInput); // 3行目にずらす
+        
+        modal.addComponents(row1, row2, row3, row4);
 
         // 4. フォームを表示！
         await interaction.showModal(modal);
@@ -87,17 +96,19 @@ export const updateCommand = async (interaction: ChatInputCommandInteraction) =>
 
         const newMeaning = submitted.fields.getTextInputValue('meaningInput');
         const newLink = submitted.fields.getTextInputValue('linkInput');
+        const newTag = submitted.fields.getTextInputValue('tagInput'); // 👈 取得
         const newTitlesStr = submitted.fields.getTextInputValue('addTitleInput');
         const messages: string[] = [];
 
         // 意味の更新
-        if (newMeaning !== currentWord.meaning || newImage || newLink !== (currentWord.link || '')) {
+        if (newMeaning !== currentWord.meaning || newImage || newLink !== (currentWord.link || '')|| newTag !== (currentWord.tag || '')) {
             const updateData: any = { meaning: newMeaning };
             
             if (newImage) updateData.imageUrl = newImage.url;
             
             // リンクの更新 (空文字なら null にする処理)
             updateData.link = newLink ? newLink : null; 
+            updateData.tag = newTag ? newTag : null;
 
             await prisma.word.update({
                 where: { id: currentWord.id },

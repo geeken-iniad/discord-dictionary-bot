@@ -8,6 +8,7 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
         const inputWord = interaction.options.getString('word');
         const inputMeaning = interaction.options.getString('meaning');
         const inputLink = interaction.options.getString('link');
+        const inputTag = interaction.options.getString('tag');
         const image = interaction.options.getAttachment('image');
 
         if (!inputWord) return;
@@ -24,6 +25,7 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
                     meaning: inputMeaning,
                     imageUrl: image ? image.url : null,
                     link: inputLink,
+                    tag: inputTag,
                     authorName: interaction.user.username,
                     titles: {
                         create: titles.map(t => ({ text: t }))
@@ -75,6 +77,7 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
                         // 画像はとりあえず「最初の1個」にだけつける（仕様はお好みで）
                         imageUrl: (successCount === 0 && image) ? image.url : null,
                         link: (successCount === 0 && inputLink) ? inputLink : null,
+                        tag: inputTag,
                         authorName: interaction.user.username,
                         titles: {
                             create: titles.map(t => ({ text: t }))

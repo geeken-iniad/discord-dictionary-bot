@@ -17,7 +17,8 @@ model Word {
   meaning    String
   authorName String?
   imageUrl   String?
-  link       String?  // 👈 これを追加！ (?をつけるのを忘れずに)
+  link       String?
+  tag        String?
   createdAt  DateTime @default(now())
   
   titles     Title[]
