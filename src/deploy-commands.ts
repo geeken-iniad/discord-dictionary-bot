@@ -77,6 +77,18 @@ const commands = [
     new SlashCommandBuilder()
         .setName('introduction')
         .setDescription('このBotの使い方と機能を紹介します'),
+
+    new SlashCommandBuilder()
+        .setName('request')
+        .setDescription('辞書に登録してほしい単語を運営にリクエストします')
+        .addStringOption(option =>
+            option.setName('word')
+                .setDescription('リクエストしたい単語')
+                .setRequired(true))
+        .addStringOption(option =>
+            option.setName('comment')
+                .setDescription('補足や応援メッセージ (任意)')
+                .setRequired(false)),
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN!);

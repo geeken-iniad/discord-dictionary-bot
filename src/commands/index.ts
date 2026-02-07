@@ -5,3 +5,4 @@ export * from './update';
 export * from './search';
 export * from './quiz';
 export * from './introduction';
+export * from './request';
