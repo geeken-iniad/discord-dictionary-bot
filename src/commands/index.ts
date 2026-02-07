@@ -4,3 +4,4 @@ export * from './delete';
 export * from './update';
 export * from './search';
 export * from './quiz';
+export * from './introduction';

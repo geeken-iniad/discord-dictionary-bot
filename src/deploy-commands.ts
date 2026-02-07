@@ -66,6 +66,10 @@ const commands = [
     new SlashCommandBuilder()
         .setName('quiz')
         .setDescription('登録された単語からクイズを出します'),
+        
+    new SlashCommandBuilder()
+        .setName('introduction')
+        .setDescription('このBotの使い方と機能を紹介します'),
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN!);
