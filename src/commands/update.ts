@@ -11,22 +11,20 @@ import { prisma } from '../prismaClient';
 
 export const updateCommand = async (interaction: ChatInputCommandInteraction) => {
     try {
-        // ⚠️ Modalを出すときは deferReply してはいけません！ (Discordのルール)
-        // await interaction.deferReply();  <-- これは削除
+        // Modalを出すときは deferReply してはいけません！
 
         const targetText = interaction.options.getString('word');
         const newImage = interaction.options.getAttachment('image');
 
         if (!targetText) return;
 
-        // 1. まず対象のデータをデータベースから探す
+        // 1. データを探す
         const targetTitle = await prisma.title.findFirst({
             where: { text: targetText },
             include: { word: true }
         });
 
         if (!targetTitle) {
-            // 見つからない場合はここで返信
             await interaction.reply({ content: `❌ **「${targetText}」** は登録されていません。`, ephemeral: true });
             return;
         }
@@ -35,31 +33,38 @@ export const updateCommand = async (interaction: ChatInputCommandInteraction) =>
 
         // 2. モーダル（編集フォーム）を作成
         const modal = new ModalBuilder()
-            .setCustomId(`updateModal-${currentWord.id}`) // IDを埋め込んでおく
+            .setCustomId(`updateModal-${currentWord.id}`)
             .setTitle(`「${targetText}」を編集`);
 
-        // 3. 入力欄を作る（ここに現在の意味を埋め込む！）
+        // ----------------------------------------------------
+        // 3. 入力欄を作る (IDが重複しないように注意！)
+        // ----------------------------------------------------
+
+        // ① 意味 (必須)
         const meaningInput = new TextInputBuilder()
             .setCustomId('meaningInput')
-            .setLabel("意味 (現在の内容が入っています)")
-            .setStyle(TextInputStyle.Paragraph) // 複数行OK
-            .setValue(currentWord.meaning) // 👈 これがやりたかった機能！
+            .setLabel("意味")
+            .setStyle(TextInputStyle.Paragraph)
+            .setValue(currentWord.meaning)
             .setRequired(true);
 
-        const linkInput = new TextInputBuilder() // 👈 追加
-            .setCustomId('linkInput')
+        // ② リンク (任意)
+        const linkInput = new TextInputBuilder()
+            .setCustomId('linkInput') // 👈 ここのIDチェック
             .setLabel("参考リンク (URL)")
             .setStyle(TextInputStyle.Short)
-            .setValue(currentWord.link || '') // 登録済みなら表示、なければ空
+            .setValue(currentWord.link || '') 
             .setRequired(false);
 
-        const tagInput = new TextInputBuilder() // 👈 追加
-            .setCustomId('tagInput')
+        // ③ タグ (任意)
+        const tagInput = new TextInputBuilder()
+            .setCustomId('tagInput') // 👈 ここのIDチェック
             .setLabel("タグ (例: ゲーム, 勉強)")
             .setStyle(TextInputStyle.Short)
             .setValue(currentWord.tag || '') 
             .setRequired(false);
 
+        // ④ 別名追加 (任意)
         const addTitleInput = new TextInputBuilder()
             .setCustomId('addTitleInput')
             .setLabel("別名を追加 (スラッシュ区切り)")
@@ -67,46 +72,49 @@ export const updateCommand = async (interaction: ChatInputCommandInteraction) =>
             .setPlaceholder('Apple / 林檎')
             .setRequired(false);
 
-        // コンポーネントを配置
+        // 4. コンポーネントを配置 (1つの行に1つの入力)
         const row1 = new ActionRowBuilder<TextInputBuilder>().addComponents(meaningInput);
-        const row2 = new ActionRowBuilder<TextInputBuilder>().addComponents(addTitleInput);
+        const row2 = new ActionRowBuilder<TextInputBuilder>().addComponents(linkInput);
         const row3 = new ActionRowBuilder<TextInputBuilder>().addComponents(tagInput);
-        const row4 = new ActionRowBuilder<TextInputBuilder>().addComponents(addTitleInput); // 3行目にずらす
-        
+        const row4 = new ActionRowBuilder<TextInputBuilder>().addComponents(addTitleInput);
+
+        // まとめてセット！
         modal.addComponents(row1, row2, row3, row4);
 
-        // 4. フォームを表示！
+        // 5. フォームを表示
         await interaction.showModal(modal);
 
-        // 5. ユーザーがフォームを送信するのを待つ (制限時間5分)
+        // 6. 送信待ち
         const filter = (i: any) => i.customId === `updateModal-${currentWord.id}`;
         
-        // ここで送信ボタンが押されるまで待機します
         const submitted = await interaction.awaitModalSubmit({ filter, time: 5 * 60 * 1000 })
             .catch(() => null);
 
-        if (!submitted) {
-            // タイムアウトした場合
-            return; 
-            // ※Modalのタイムアウト時は何も返さなくてOK（ユーザー側で勝手に閉じるため）
-        }
+        if (!submitted) return;
 
-        // --- ここからは送信後の処理 ---
-        await submitted.deferReply(); // 送信ボタンを押した後なら待機中を出せる
+        // --- 送信後の処理 ---
+        await submitted.deferReply();
 
         const newMeaning = submitted.fields.getTextInputValue('meaningInput');
         const newLink = submitted.fields.getTextInputValue('linkInput');
-        const newTag = submitted.fields.getTextInputValue('tagInput'); // 👈 取得
+        const newTag = submitted.fields.getTextInputValue('tagInput');
         const newTitlesStr = submitted.fields.getTextInputValue('addTitleInput');
+        
         const messages: string[] = [];
 
-        // 意味の更新
-        if (newMeaning !== currentWord.meaning || newImage || newLink !== (currentWord.link || '')|| newTag !== (currentWord.tag || '')) {
+        // 変更チェック & 更新
+        // (意味、画像、リンク、タグ のどれかが変わっていたら更新)
+        if (
+            newMeaning !== currentWord.meaning || 
+            newImage || 
+            newLink !== (currentWord.link || '') ||
+            newTag !== (currentWord.tag || '')
+        ) {
             const updateData: any = { meaning: newMeaning };
             
             if (newImage) updateData.imageUrl = newImage.url;
             
-            // リンクの更新 (空文字なら null にする処理)
+            // 空文字なら null に変換して保存
             updateData.link = newLink ? newLink : null; 
             updateData.tag = newTag ? newTag : null;
 
@@ -117,7 +125,7 @@ export const updateCommand = async (interaction: ChatInputCommandInteraction) =>
             messages.push('✅ 本体情報を更新しました');
         }
 
-        // 別名の追加
+        // 別名の追加処理
         if (newTitlesStr) {
             const newTitles = newTitlesStr.split('/').map(t => t.trim()).filter(t => t.length > 0);
             let addedCount = 0;
@@ -155,12 +163,14 @@ export const updateCommand = async (interaction: ChatInputCommandInteraction) =>
             .setFooter({ text: messages.join('\n') });
 
         if (updatedWord!.imageUrl) embed.setImage(updatedWord!.imageUrl);
+        // タグとリンクの表示も更新
+        if (updatedWord!.tag) embed.addFields({ name: '🏷️ タグ', value: updatedWord!.tag, inline: true });
+        if (updatedWord!.link) embed.setURL(updatedWord!.link);
 
         await submitted.editReply({ embeds: [embed] });
 
     } catch (error) {
         console.error(error);
-        // モーダル表示前のエラーならreply、後ならeditReplyが必要だが、
-        // 複雑になるので簡易的にコンソールのみ
+        // showModal後のエラーは拾えないことが多いですが、ログには出ます
     }
 };
