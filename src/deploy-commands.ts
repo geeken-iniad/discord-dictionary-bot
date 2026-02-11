@@ -5,6 +5,8 @@ dotenv.config();
 
 const commands = [
     // /add
+
+    // SlashCommnedBuilderから設定できる。その後は.addなんとかで各項目の設定
     new SlashCommandBuilder()
         .setName('add')
         .setDescription('単語を登録します')
