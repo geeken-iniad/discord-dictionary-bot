@@ -91,6 +91,10 @@ const commands = [
             option.setName('comment')
                 .setDescription('補足や応援メッセージ (任意)')
                 .setRequired(false)),
+
+    new ContextMenuCommandBuilder()
+        .setName('📖 辞書に登録')
+        .setType(ApplicationCommandType.Message),
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN!);
