@@ -92,8 +92,14 @@ const commands = [
                 .setDescription('補足や応援メッセージ (任意)')
                 .setRequired(false)),
 
+    // ① 既存のやつ (名前を分かりやすく変更推奨)
     new ContextMenuCommandBuilder()
-        .setName('📖 辞書に登録')
+        .setName('📖 意味を引用して登録') // 👈 変更
+        .setType(ApplicationCommandType.Message),
+
+    // ② 新しく追加するやつ
+    new ContextMenuCommandBuilder()
+        .setName('🔖 単語名を引用して登録') // 👈 追加！
         .setType(ApplicationCommandType.Message),
 ];
 

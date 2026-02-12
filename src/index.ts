@@ -61,21 +61,20 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
     
     // 🅱️ 右クリックメニュー (MessageContextMenuCommand) の場合
     else if (interaction.isMessageContextMenuCommand()) {
-        // コマンド名（deploy-commands.tsで設定した名前）で判定
-        if (interaction.commandName === '📖 辞書に登録') {
+        // コマンド名が以下の「どれか」だったら実行する
+        if (
+            interaction.commandName === '📖 辞書に登録' ||      // (古い名前の互換用)
+            interaction.commandName === '📖 意味を引用して登録' || 
+            interaction.commandName === '🔖 単語名を引用して登録'
+        ) {
             try {
                 await commands.contextAddCommand(interaction);
             } catch (error) {
                 console.error(`Context Menu Error`, error);
-                const reply = { content: '❌ エラーが発生しました', ephemeral: true };
-                if (interaction.replied || interaction.deferred) {
-                    await interaction.followUp(reply);
-                } else {
-                    await interaction.reply(reply);
-                }
+                // ... (エラー処理省略)
             }
         }
-    }
+    }   
 });
 
 // メッセージ辞書機能

@@ -1,49 +1,53 @@
+// src/commands/contextAdd.ts
+
 import { 
     ContextMenuCommandInteraction, 
     ModalBuilder, 
     TextInputBuilder, 
     TextInputStyle, 
     ActionRowBuilder, 
-    ApplicationCommandType,
-    EmbedBuilder,
+    EmbedBuilder, 
     Colors 
 } from 'discord.js';
 import { prisma } from '../prismaClient';
 
 export const contextAddCommand = async (interaction: ContextMenuCommandInteraction) => {
-    // Message Context Menu 以外なら無視
     if (!interaction.isMessageContextMenuCommand()) return;
 
     const targetMessage = interaction.targetMessage;
-    
-    // メッセージの内容を取得 (空なら空文字)
-    const initialMeaning = targetMessage.content || '';
-    // メッセージに画像があれば、そのURLを取得 (最初の1枚)
+    const content = targetMessage.content || '';
     const initialImage = targetMessage.attachments.first()?.url || '';
+
+    // ⚖️ ここで判定！「どっちのコマンドで呼ばれた？」
+    // "🔖 単語名を引用して登録" なら true
+    const isWordMode = interaction.commandName.includes('単語名');
 
     // 1. モーダル作成
     const modal = new ModalBuilder()
         .setCustomId('contextAddModal')
-        .setTitle('📖 辞書に登録');
+        .setTitle(isWordMode ? '🔖 単語名を引用して登録' : '📖 意味を引用して登録');
 
-    // 2. 入力欄を作る
-    // ① 単語 (これはユーザーに入力してもらう)
+    // 2. 入力欄を作る (isWordMode によって初期値の場所を変える)
+    
+    // ① 単語
     const wordInput = new TextInputBuilder()
         .setCustomId('wordInput')
         .setLabel("単語名")
         .setStyle(TextInputStyle.Short)
-        .setPlaceholder('登録したい単語を入力してください')
+        .setPlaceholder('登録したい単語を入力')
+        .setValue(isWordMode ? content.substring(0, 100) : '') // 👈 Wordモードならここに入れる
         .setRequired(true);
 
-    // ② 意味 (メッセージの内容を最初から入れておく！)
+    // ② 意味
     const meaningInput = new TextInputBuilder()
         .setCustomId('meaningInput')
         .setLabel("意味")
         .setStyle(TextInputStyle.Paragraph)
-        .setValue(initialMeaning.substring(0, 4000)) // 長すぎるとエラーになるのでカット
+        .setPlaceholder('解説を入力してください')
+        .setValue(isWordMode ? '' : content.substring(0, 4000)) // 👈 違うならここに入れる
         .setRequired(true);
 
-    // ③ リンク (画像URLがあれば入れておく、なければ空)
+    // ③ リンク (画像があればセット)
     const linkInput = new TextInputBuilder()
         .setCustomId('linkInput')
         .setLabel("参考リンク / 画像URL")
@@ -54,7 +58,7 @@ export const contextAddCommand = async (interaction: ContextMenuCommandInteracti
     // ④ タグ
     const tagInput = new TextInputBuilder()
         .setCustomId('tagInput')
-        .setLabel("タグ (例: 技術, 内輪ネタ)")
+        .setLabel("タグ")
         .setStyle(TextInputStyle.Short)
         .setRequired(false);
 
@@ -65,28 +69,26 @@ export const contextAddCommand = async (interaction: ContextMenuCommandInteracti
         new ActionRowBuilder<TextInputBuilder>().addComponents(tagInput)
     );
 
-    // 3. フォームを表示
+    // 3. 表示
     await interaction.showModal(modal);
 
-    // 4. 送信待ち (制限時間: 5分)
+    // 4. 送信待ち (後の処理は前回と同じでOK！)
     const submitted = await interaction.awaitModalSubmit({
         time: 5 * 60 * 1000,
         filter: (i) => i.customId === 'contextAddModal'
     }).catch(() => null);
 
-    if (!submitted) return; // タイムアウトやキャンセルの場合
+    if (!submitted) return;
 
     try {
         await submitted.deferReply();
 
-        // 入力値の取得
         const word = submitted.fields.getTextInputValue('wordInput');
         const meaning = submitted.fields.getTextInputValue('meaningInput');
         const link = submitted.fields.getTextInputValue('linkInput');
         const tag = submitted.fields.getTextInputValue('tagInput');
 
-        // DBに保存
-        // (スラッシュ区切りで複数の別名も登録できるようにする)
+        // DB保存処理
         const titles = word.split('/').map(t => t.trim()).filter(t => t.length > 0);
 
         const newWord = await prisma.word.create({
@@ -94,7 +96,6 @@ export const contextAddCommand = async (interaction: ContextMenuCommandInteracti
                 meaning: meaning,
                 link: link || null,
                 tag: tag || null,
-                // もしリンクが画像URLっぽかったらimageUrlにも入れる小技
                 imageUrl: (link && link.match(/\.(jpeg|jpg|gif|png)$/) != null) ? link : null,
                 authorName: interaction.user.username,
                 titles: {
