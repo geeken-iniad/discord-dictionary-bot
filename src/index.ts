@@ -2,7 +2,7 @@
 import { Client, Events, GatewayIntentBits, Interaction } from 'discord.js';
 import dotenv from 'dotenv';
 
-// ✨ 作ったバレルファイルをインポート（commandsの中身が全部入っています）
+// ✨ 作ったバレルファイルをインポート
 import * as commands from './commands';
 import { handleMessage } from './events/messageHandler';
 
@@ -18,11 +18,11 @@ const client = new Client({
 
 client.once(Events.ClientReady, (c) => {
     console.log(`準備OK！ ${c.user.tag} が起動しました。`);
-    console.log(`コマンド同期完了: /add, /list, /delete, /update, /search, /introduction, /request, /contextAdd が使えます`);
+    // contextAdd はスラッシュコマンドではないので、ログからは外しておくと分かりやすいです
+    console.log(`コマンド同期完了: /add, /list, /delete, /update, /search, /introduction, /request が使えます`);
 });
 
-// ▼ 【重要】コマンド名と関数の「対応表（Map）」を作ります
-// これが if文の代わりになります
+// ▼ スラッシュコマンド用の対応表
 const commandMap: { [key: string]: (interaction: any) => Promise<void> } = {
     'add': commands.addCommand,
     'list': commands.listCommand,
@@ -32,32 +32,49 @@ const commandMap: { [key: string]: (interaction: any) => Promise<void> } = {
     'quiz': commands.quizCommand,
     'introduction': commands.introductionCommand,
     'request': commands.requestCommand,
-    'contextAdd': commands.contextAddCommand,
+    // 'contextAdd' はここには書きません（コマンド名が日本語のため別処理にします）
 };
 
 client.on(Events.InteractionCreate, async (interaction: Interaction) => {
-    if (!interaction.isChatInputCommand()) return;
-
-    const { commandName } = interaction;
     
-    // ▼ 対応表から、コマンド名に一致する関数を探す 
-    const command = commandMap[commandName];
+    // 🅰️ スラッシュコマンド (ChatInputCommand) の場合
+    if (interaction.isChatInputCommand()) {
+        const { commandName } = interaction;
+        const command = commandMap[commandName];
 
-    // もし対応する関数があれば実行する
-    if (command) {
-        try {
-            await command(interaction);
-        } catch (error) {
-            console.error(error);
-            // エラー処理を一括管理
-            if (interaction.replied || interaction.deferred) {
-                await interaction.followUp({ content: '❌ エラーが発生しました', ephemeral: true });
-            } else {
-                await interaction.reply({ content: '❌ エラーが発生しました', ephemeral: true });
+        if (command) {
+            try {
+                await command(interaction);
+            } catch (error) {
+                console.error(`Command Error: ${commandName}`, error);
+                const reply = { content: '❌ エラーが発生しました', ephemeral: true };
+                if (interaction.replied || interaction.deferred) {
+                    await interaction.followUp(reply);
+                } else {
+                    await interaction.reply(reply);
+                }
+            }
+        } else {
+            console.error(`コマンド ${commandName} は見つかりませんでした。`);
+        }
+    } 
+    
+    // 🅱️ 右クリックメニュー (MessageContextMenuCommand) の場合
+    else if (interaction.isMessageContextMenuCommand()) {
+        // コマンド名（deploy-commands.tsで設定した名前）で判定
+        if (interaction.commandName === '📖 辞書に登録') {
+            try {
+                await commands.contextAddCommand(interaction);
+            } catch (error) {
+                console.error(`Context Menu Error`, error);
+                const reply = { content: '❌ エラーが発生しました', ephemeral: true };
+                if (interaction.replied || interaction.deferred) {
+                    await interaction.followUp(reply);
+                } else {
+                    await interaction.reply(reply);
+                }
             }
         }
-    } else {
-        console.error(`コマンド ${commandName} は見つかりませんでした。`);
     }
 });
 
