@@ -1,4 +1,4 @@
-import { REST, Routes, SlashCommandBuilder } from 'discord.js';
+import { REST, Routes, ContextMenuCommandBuilder, ApplicationCommandType, SlashCommandBuilder } from 'discord.js';
 import dotenv from 'dotenv';
 
 dotenv.config();

@@ -18,7 +18,7 @@ const client = new Client({
 
 client.once(Events.ClientReady, (c) => {
     console.log(`準備OK！ ${c.user.tag} が起動しました。`);
-    console.log(`コマンド同期完了: /add, /list, /delete, /update, /search, /introduction, /request が使えます`);
+    console.log(`コマンド同期完了: /add, /list, /delete, /update, /search, /introduction, /request, /contextAdd が使えます`);
 });
 
 // ▼ 【重要】コマンド名と関数の「対応表（Map）」を作ります
@@ -32,6 +32,7 @@ const commandMap: { [key: string]: (interaction: any) => Promise<void> } = {
     'quiz': commands.quizCommand,
     'introduction': commands.introductionCommand,
     'request': commands.requestCommand,
+    'contextAdd': commands.contextAddCommand,
 };
 
 client.on(Events.InteractionCreate, async (interaction: Interaction) => {
