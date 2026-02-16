@@ -1,7 +1,7 @@
 import { Message, EmbedBuilder, Colors, ChannelType } from 'discord.js';
 import { prisma } from '../prismaClient';
 
-// 正規化関数 (importがなければここで定義してもOK)
+// 正規化関数
 function normalize(str: string): string {
     return str
         .replace(/[\u3041-\u3096]/g, match => String.fromCharCode(match.charCodeAt(0) + 0x60))
@@ -11,7 +11,7 @@ function normalize(str: string): string {
 export const handleMessage = async (message: Message) => {
     // Bot自身の発言や、Botへのメンションなどは無視
     if (message.author.bot) return;
-    if (!message.guild) return; // DMは無視
+    if (!message.guild) return; 
 
     try {
         // 1. URL除去 & 正規化
@@ -19,11 +19,11 @@ export const handleMessage = async (message: Message) => {
         if (!contentWithoutUrl.trim()) return;
         const normalizedContent = normalize(contentWithoutUrl);
 
-        // 2. DBから単語取得 【👇ここを修正しました！】
+        // 2. DBから単語取得 (includeの階層を深くしてエラー回避)
         const allTitles = await prisma.title.findMany({
             include: { 
                 word: {
-                    include: { titles: true } // 👈 これを追加！単語に紐づく全タイトルを取得します
+                    include: { titles: true } 
                 } 
             }
         });
@@ -35,14 +35,13 @@ export const handleMessage = async (message: Message) => {
 
         if (hitTitles.length === 0 ) return;
 
-        // 重複除去 (同じ単語の別名などが複数ヒットした場合用)
+        // 重複除去
         const uniqueWords = new Map();
         hitTitles.forEach(t => uniqueWords.set(t.wordId, t.word));
         const hits = Array.from(uniqueWords.values());
 
         // 4. 解説Embedを作成
         const embeds = hits.map(word => {
-            // word.titles が確実に配列として存在するようになるのでエラーが消えます
             const titleText = (word.titles && word.titles.length > 0) ? word.titles[0].text : '詳細';
 
             const embed = new EmbedBuilder()
@@ -58,18 +57,21 @@ export const handleMessage = async (message: Message) => {
             return embed;
         });
 
-        // 5. 送信処理
+        // 5. 送信処理 (最強のサイレントモード)
         
-        // 既にスレッドの中での会話なら、普通に返信する
+        // ▼ 既にスレッドの中なら、返信(reply)して通知をOFFにする
         if (message.channel.type === ChannelType.PublicThread || message.channel.type === ChannelType.PrivateThread) {
             await message.reply({ 
                 embeds: embeds,
-                allowedMentions: { repliedUser: false } 
+                allowedMentions: { 
+                    repliedUser: false, // 相手への通知OFF
+                    parse: []           // 本文中のメンションも全て無効化
+                } 
             });
             return;
         }
 
-        // 通常チャンネルなら、スレッドを作ってそこに投稿する
+        // ▼ 通常チャンネルなら、スレッドを作ってそこに投稿する
         let thread = message.thread;
         
         // まだスレッドがなければ作る
@@ -77,6 +79,7 @@ export const handleMessage = async (message: Message) => {
             try {
                 if (!hitTitles[0]) return;
                 
+                // ⚠️ Discordの仕様上、ここの「スレッド作成通知」だけは相手に届いてしまいます
                 thread = await message.startThread({
                     name: `解説: ${hitTitles[0].text}`, 
                     autoArchiveDuration: 60, 
@@ -84,19 +87,21 @@ export const handleMessage = async (message: Message) => {
                 });
             } catch (e) {
                 console.error(e);
+                // エラー時は普通に返信（ここも通知OFF）
                 await message.reply({ 
                     embeds: embeds, 
-                    allowedMentions: { repliedUser: false } 
+                    allowedMentions: { repliedUser: false, parse: [] } 
                 });
                 return;
             }
         }
 
         // スレッドの中に書き込む
+        // replyではなくsendを使うことで、さらに通知のリスクを下げる
         await thread.send({
             content: '用語が見つかりました！', 
             embeds: embeds,
-            allowedMentions: { repliedUser: false } 
+            allowedMentions: { parse: [] } // 👈 最強の通知カット設定
         });
 
     } catch (error) {
