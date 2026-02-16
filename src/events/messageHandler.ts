@@ -1,18 +1,9 @@
-import { 
-    Message, 
-    EmbedBuilder, 
-    Colors,
-    // 👇 TextBasedChannel の代わりに、具体的な型をインポートします
-    TextChannel,
-    ThreadChannel,
-    DMChannel
-} from 'discord.js';
+import { Message, EmbedBuilder, Colors, ChannelType } from 'discord.js';
 import { prisma } from '../prismaClient';
+import * as Levenshtein from 'fast-levenshtein';
+const { get } = Levenshtein;
 
-// クールダウン管理用
-const cooldowns = new Map<string, number>();
-
-// 🪄 魔法の関数
+// 正規化関数
 function normalize(str: string): string {
     return str
         .replace(/[\u3041-\u3096]/g, match => String.fromCharCode(match.charCodeAt(0) + 0x60))
@@ -20,114 +11,93 @@ function normalize(str: string): string {
 }
 
 export const handleMessage = async (message: Message) => {
+    // Bot自身の発言や、Botへのメンションなどは無視
     if (message.author.bot) return;
-
-    // 1. データベースから取得
-    const allTitles = await prisma.title.findMany({
-        include: { word: true }
-    });
-
-    const contentWithoutUrl = message.content.replace(/https?:\/\/[^\s]+/g, '');
-
-    // URLを消した結果、中身が空っぽになったら（＝URLだけの投稿なら）何もしない
-    if (!contentWithoutUrl.trim()) return;
-
-    // Botは「URLが消されたあとの文章」を正規化してチェックする
-    const normalizedContent = normalize(contentWithoutUrl);
-
-    // 2. マッチング
-    const hitTitles = allTitles.filter(t => {
-        return normalizedContent.includes(normalize(t.text));
-    });
-
-    if (hitTitles.length === 0) return;
-
-    // 3. 重複除去
-    const uniqueWords = new Map();
-    for (const title of hitTitles) {
-        uniqueWords.set(title.wordId, title.word);
-    }
-    const wordsToExplain = Array.from(uniqueWords.values());
-
-    // 4. クールダウン処理
-    const now = Date.now();
-    const COOLDOWN_TIME = 60 * 60 * 1000;
-    
-    const validWords = wordsToExplain.filter(word => {
-        const key = `word_${word.id}`; 
-        const lastTime = cooldowns.get(key);
-        if (!lastTime || (now - lastTime > COOLDOWN_TIME)) {
-            return true;
-        }
-        return false;
-    });
-
-    if (validWords.length === 0) return;
+    if (!message.guild) return; // DMは無視
 
     try {
-        const wordWithTitles = await Promise.all(validWords.map(w => 
-            prisma.word.findUnique({ where: { id: w.id }, include: { titles: true } })
-        ));
+        // 1. URL除去 & 正規化
+        const contentWithoutUrl = message.content.replace(/https?:\/\/[^\s]+/g, '');
+        if (!contentWithoutUrl.trim()) return;
+        const normalizedContent = normalize(contentWithoutUrl);
 
-        // flatMapでnull除去
-        const validResults = wordWithTitles.flatMap(w => w ? [w] : []);
+        // 2. DBから単語取得
+        const allTitles = await prisma.title.findMany({
+            include: { word: true }
+        });
+
+        // 3. マッチング
+        const hitTitles = allTitles.filter(t => {
+            return normalizedContent.includes(normalize(t.text));
+        });
+
+        if (hitTitles.length === 0 ) return;
         
-        if (validResults.length === 0) return;
 
-        // 📝 分岐処理
-        const isThreadAlready = message.channel.isThread();
-        const isDM = !message.inGuild();
+        // 重複除去 (同じ単語の別名などが複数ヒットした場合用)
+        const uniqueWords = new Map();
+        hitTitles.forEach(t => uniqueWords.set(t.wordId, t.word));
+        const hits = Array.from(uniqueWords.values());
 
-        // 📝 修正ポイント: 送信可能なチャンネルの型を並べて指定します
-        let targetChannel: TextChannel | ThreadChannel | DMChannel; 
-
-        if (isThreadAlready || isDM) {
-            // TypeScriptに「これはTextChannelだと思っていいよ」と強制します
-            // (実際にはDMやThreadかもしれませんが、sendメソッドの使い方は同じなのでOKです)
-            targetChannel = message.channel as TextChannel;
-        } else {
-            const titleTerms = validResults
-                .map(w => w.titles[0]?.text)
-                .filter(t => t)
-                .join(', ');
-
-            // startThreadは ThreadChannel を返すのでそのまま代入できます
-            targetChannel = await message.startThread({
-                name: `解説: ${titleTerms}`.substring(0, 90),
-                autoArchiveDuration: 60,
-            });
-        }
-
-        // 解説カード送信
-        for (const word of validResults) {
-            const titleText = word.titles.map(t => t.text).join(' / ');
-            
+        // 4. 解説Embedを作成
+        const embeds = hits.map(word => {
             const embed = new EmbedBuilder()
                 .setColor(Colors.Blue)
-                .setTitle(`📚 ${titleText} の解説`)
+                .setTitle(`📚 解説: ${word.titles[0]?.text || '詳細'}`) // タイトルを取得
                 .setDescription(word.meaning)
-                .setFooter({ text: '💡 連続での反応は1時間制限しています' });
+                .setFooter({ text: '💡 連続での反応は制限されています' });
 
-            if (word.imageUrl) {
-                embed.setImage(word.imageUrl);
-            }
+            if (word.imageUrl) embed.setImage(word.imageUrl);
+            if (word.link) embed.setURL(word.link);
+            if (word.tag) embed.addFields({ name: '🏷️ タグ', value: word.tag, inline: true });
 
-            if (word.link) {
-                embed.setURL(word.link);
-            }
+            return embed;
+        });
 
-            if (word.tag) {
-                embed.setFooter({ text: `🏷️ ${word.tag} | 💡 連続での反応は1時間制限しています` });
-            }
-
-            await targetChannel.send({ embeds: [embed] });
-            
-            cooldowns.set(`word_${word.id}`, now);
-        }
+        // 5. 送信処理（ここが重要！）
         
-        console.log(`反応しました (Thread: ${!isThreadAlready})`);
+        // 既にスレッドの中での会話なら、普通に返信する（ただし通知はOFF）
+        if (message.channel.type === ChannelType.PublicThread || message.channel.type === ChannelType.PrivateThread) {
+            await message.reply({ 
+                embeds: embeds,
+                allowedMentions: { repliedUser: false } // 👈 これで通知がいかない！
+            });
+            return;
+        }
+
+        // 通常チャンネルなら、スレッドを作ってそこに投稿する
+        let thread = message.thread;
+        
+        // まだスレッドがなければ作る
+        if (!thread) {
+            try {
+                if (hitTitles[0] === undefined ) return;
+                
+                thread = await message.startThread({
+                    name: `解説: ${hitTitles[0].text}`, // スレッド名
+                    autoArchiveDuration: 60, // 1時間でアーカイブ
+                    reason: '用語解説のため',
+                });
+            } catch (e) {
+                // 権限不足などでスレッドが作れなかったら、仕方ないので普通に返す
+                console.error(e);
+                await message.reply({ 
+                    embeds: embeds, 
+                    allowedMentions: { repliedUser: false } // 通知OFF
+                });
+                return;
+            }
+        }
+
+        // スレッドの中に書き込む（ReplyではなくSendを使うとより静かです）
+        await thread.send({
+            content: '用語が見つかりました！', // 何か一言あると親切（なくてもOK）
+            embeds: embeds,
+            // 念には念を入れ、ここでもメンション通知をOFFにする
+            allowedMentions: { repliedUser: false } 
+        });
 
     } catch (error) {
-        console.error('メッセージ送信エラー:', error);
+        console.error('AutoResponse Error:', error);
     }
 };
