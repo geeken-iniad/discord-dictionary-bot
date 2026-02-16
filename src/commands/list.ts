@@ -7,10 +7,11 @@ import {
     ButtonStyle, 
     StringSelectMenuBuilder,
     StringSelectMenuOptionBuilder,
+    MessageFlags // 👈 追加
 } from 'discord.js';
 import { prisma } from '../prismaClient';
 
-const ITEMS_PER_PAGE = 10; // 1ページに表示する件数
+const ITEMS_PER_PAGE = 10; 
 
 export const listCommand = async (interaction: ChatInputCommandInteraction) => {
     try {
@@ -126,17 +127,17 @@ export const listCommand = async (interaction: ChatInputCommandInteraction) => {
             time: 5 * 60 * 1000 
         });
 
-        // 🛑 ここから修正！ try-catch で囲んで安全にしました
         collector.on('collect', async (i: any) => {
             try {
                 if (i.user.id !== interaction.user.id) {
-                    await i.reply({ content: '自分のコマンド以外は操作できません', ephemeral: true });
+                    // 👇 ここを修正！
+                    await i.reply({ content: '自分のコマンド以外は操作できません', flags: MessageFlags.Ephemeral });
                     return;
                 }
 
                 // A. ページ送りボタン
                 if (i.isButton()) {
-                    await i.deferUpdate(); // ⏳ タイムアウト防止
+                    await i.deferUpdate(); 
                     if (i.customId === 'prev') currentPage = Math.max(0, currentPage - 1);
                     if (i.customId === 'next') currentPage = Math.min(maxPage, currentPage + 1);
                     await i.editReply(generateView(currentPage));
@@ -152,13 +153,15 @@ export const listCommand = async (interaction: ChatInputCommandInteraction) => {
                     const targetWord = allWords.find(w => w.id === selectedWordId);
 
                     if (!targetWord) {
-                        await i.reply({ content: '❌ エラー：単語が見つかりません', ephemeral: true });
+                        // 👇 ここを修正！
+                        await i.reply({ content: '❌ エラー：単語が見つかりません', flags: MessageFlags.Ephemeral });
                         return;
                     }
 
                     // タグが一つもない場合の対応
                     if (existingTags.length === 0 && !targetWord.tag) {
-                        await i.reply({ content: '⚠️ まだタグが一つも作られていません。`/add` か `/update` で新しいタグを作ってください。', ephemeral: true });
+                        // 👇 ここを修正！
+                        await i.reply({ content: '⚠️ まだタグが一つも作られていません。`/add` か `/update` で新しいタグを作ってください。', flags: MessageFlags.Ephemeral });
                         return;
                     }
 
@@ -183,16 +186,16 @@ export const listCommand = async (interaction: ChatInputCommandInteraction) => {
 
                     const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(tagSelectMenu);
 
+                    // 👇 ここを修正！
                     await i.reply({ 
                         content: `**「${targetWord.titles[0]?.text}」** のタグを編集します`, 
                         components: [row], 
-                        ephemeral: true
+                        flags: MessageFlags.Ephemeral 
                     });
                 }
 
                 // C. タグ適用処理
                 if (i.isStringSelectMenu() && i.customId.startsWith('applyTag_')) {
-                    // ⏳ ここが重要！すぐに「処理中」と伝える
                     await i.deferUpdate();
 
                     const wordId = parseInt(i.customId.replace('applyTag_', ''));
@@ -201,25 +204,21 @@ export const listCommand = async (interaction: ChatInputCommandInteraction) => {
 
                     const newTag = newTagRaw === '__REMOVE_TAG__' ? null : newTagRaw;
 
-                    // DB更新
                     await prisma.word.update({
                         where: { id: wordId },
                         data: { tag: newTag }
                     });
 
-                    // メモリ上のデータも更新
                     const wordIndex = allWords.findIndex(w => w.id === wordId);
                     if (wordIndex !== -1 && allWords[wordIndex]) {
                         allWords[wordIndex]!.tag = newTag;
                     }
 
-                    // メニューを出した自分へのメッセージを更新
                     await i.editReply({ 
                         content: `✅ タグを **${newTag || 'なし'}** に変更しました！`, 
                         components: [] 
                     });
                     
-                    // 大元のリストも更新
                     await interaction.editReply(generateView(currentPage));
                 }
 
@@ -227,7 +226,8 @@ export const listCommand = async (interaction: ChatInputCommandInteraction) => {
                 console.error('List Interaction Error:', e);
                 // エラー時はユーザーに伝える
                 if (!i.replied && !i.deferred) {
-                    await i.reply({ content: '❌ エラーが発生しました。', ephemeral: true }).catch(() => {});
+                    // 👇 ここを修正！
+                    await i.reply({ content: '❌ エラーが発生しました。', flags: MessageFlags.Ephemeral }).catch(() => {});
                 }
             }
         });
