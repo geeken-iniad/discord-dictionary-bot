@@ -5,11 +5,8 @@ import {
     ActionRowBuilder, 
     ButtonBuilder, 
     ButtonStyle, 
-    ComponentType,
-    ButtonInteraction,
     StringSelectMenuBuilder,
     StringSelectMenuOptionBuilder,
-    StringSelectMenuInteraction
 } from 'discord.js';
 import { prisma } from '../prismaClient';
 
@@ -20,22 +17,19 @@ export const listCommand = async (interaction: ChatInputCommandInteraction) => {
         await interaction.deferReply();
         const filterTag = interaction.options.getString('tag');
 
-        // 1. データを取得 (タグ絞り込み対応)
+        // 1. データを取得
         const whereClause = filterTag ? { tag: filterTag } : {};
 
-        // 全件取得してからJS側でページ分けします
         const allWords = await prisma.word.findMany({
             where: whereClause,
             include: { titles: true },
             orderBy: { createdAt: 'desc' }
         });
 
-        // 🌟 既存のタグ一覧を取得 (重複排除)
+        // 🌟 既存のタグ一覧を取得
         const existingTagsRaw = await prisma.word.groupBy({
             by: ['tag'],
-            where: { 
-                tag: { not: null } 
-            }
+            where: { tag: { not: null } }
         });
         
         const existingTags = existingTagsRaw
@@ -46,7 +40,6 @@ export const listCommand = async (interaction: ChatInputCommandInteraction) => {
             const msg = filterTag 
                 ? `🏷️ タグ **「${filterTag}」** が付いた単語は見つかりませんでした。`
                 : '📭 辞書はまだ空っぽです。`/add` で追加してください！';
-            
             await interaction.editReply(msg);
             return;
         }
@@ -61,7 +54,6 @@ export const listCommand = async (interaction: ChatInputCommandInteraction) => {
             const end = start + ITEMS_PER_PAGE;
             const currentItems = allWords.slice(start, end);
 
-            // ① Embed作成
             const titleText = filterTag 
                 ? `📖 登録単語リスト (タグ: ${filterTag})` 
                 : '📖 登録単語リスト';
@@ -73,11 +65,9 @@ export const listCommand = async (interaction: ChatInputCommandInteraction) => {
                 .addFields(
                     currentItems.map(word => {
                         const titleText = word.titles.map(t => t.text).join(' / ');
-                        
                         const shortMeaning = word.meaning.length > 50 
                             ? word.meaning.substring(0, 50) + '...' 
                             : word.meaning;
-
                         const authorInfo = word.authorName ? `by ${word.authorName}` : '不明';
                         const tagInfo = word.tag ? ` | 🏷️ ${word.tag}` : '';
 
@@ -91,7 +81,7 @@ export const listCommand = async (interaction: ChatInputCommandInteraction) => {
 
             const components: ActionRowBuilder<any>[] = [];
 
-            // ② 単語選択メニュー (タグ編集用)
+            // ② 単語選択メニュー
             if (currentItems.length > 0) {
                 const selectMenu = new StringSelectMenuBuilder()
                     .setCustomId('selectWordForTag')
@@ -127,7 +117,6 @@ export const listCommand = async (interaction: ChatInputCommandInteraction) => {
             return { embeds: [embed], components };
         };
 
-        // 3. 初回表示
         const response = await interaction.editReply(generateView(currentPage));
 
         if (allWords.length === 0) return;
@@ -137,98 +126,109 @@ export const listCommand = async (interaction: ChatInputCommandInteraction) => {
             time: 5 * 60 * 1000 
         });
 
+        // 🛑 ここから修正！ try-catch で囲んで安全にしました
         collector.on('collect', async (i: any) => {
-            if (i.user.id !== interaction.user.id) {
-                await i.reply({ content: '自分のコマンド以外は操作できません', ephemeral: true });
-                return;
-            }
-
-            // A. ページ送りボタン
-            if (i.isButton()) {
-                if (i.customId === 'prev') {
-                    currentPage = Math.max(0, currentPage - 1);
-                } else if (i.customId === 'next') {
-                    currentPage = Math.min(maxPage, currentPage + 1);
-                }
-                await i.update(generateView(currentPage));
-                return;
-            }
-
-            // B. 単語選択メニュー (タグ編集画面を出す)
-            if (i.isStringSelectMenu() && i.customId === 'selectWordForTag') {
-                const val = i.values[0];
-                if (!val) return; // 🛑 ガード節を追加
-
-                const selectedWordId = parseInt(val);
-                const targetWord = allWords.find(w => w.id === selectedWordId);
-
-                if (!targetWord) {
-                    await i.reply({ content: '❌ エラー：単語が見つかりません', ephemeral: true });
+            try {
+                if (i.user.id !== interaction.user.id) {
+                    await i.reply({ content: '自分のコマンド以外は操作できません', ephemeral: true });
                     return;
                 }
 
-                // タグが一つもない場合の対応
-                if (existingTags.length === 0 && !targetWord.tag) {
-                    await i.reply({ content: '⚠️ まだタグが一つも作られていません。`/add` か `/update` で新しいタグを作ってください。', ephemeral: true });
+                // A. ページ送りボタン
+                if (i.isButton()) {
+                    await i.deferUpdate(); // ⏳ タイムアウト防止
+                    if (i.customId === 'prev') currentPage = Math.max(0, currentPage - 1);
+                    if (i.customId === 'next') currentPage = Math.min(maxPage, currentPage + 1);
+                    await i.editReply(generateView(currentPage));
                     return;
                 }
 
-                const tagOptions = existingTags.slice(0, 24).map(tag => 
-                    new StringSelectMenuOptionBuilder()
-                        .setLabel(tag)
-                        .setValue(tag)
-                        .setDefault(targetWord.tag === tag)
-                );
+                // B. 単語選択メニュー (タグ編集画面を出す)
+                if (i.isStringSelectMenu() && i.customId === 'selectWordForTag') {
+                    const val = i.values[0];
+                    if (!val) return; 
 
-                tagOptions.unshift(
-                    new StringSelectMenuOptionBuilder()
-                        .setLabel('❌ タグを削除 (未設定にする)')
-                        .setValue('__REMOVE_TAG__')
-                        .setDescription('タグを外します')
-                );
+                    const selectedWordId = parseInt(val);
+                    const targetWord = allWords.find(w => w.id === selectedWordId);
 
-                const tagSelectMenu = new StringSelectMenuBuilder()
-                    .setCustomId(`applyTag_${selectedWordId}`)
-                    .setPlaceholder('付与するタグを選択してください')
-                    .addOptions(tagOptions);
+                    if (!targetWord) {
+                        await i.reply({ content: '❌ エラー：単語が見つかりません', ephemeral: true });
+                        return;
+                    }
 
-                const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(tagSelectMenu);
+                    // タグが一つもない場合の対応
+                    if (existingTags.length === 0 && !targetWord.tag) {
+                        await i.reply({ content: '⚠️ まだタグが一つも作られていません。`/add` か `/update` で新しいタグを作ってください。', ephemeral: true });
+                        return;
+                    }
 
-                await i.reply({ 
-                    content: `**「${targetWord.titles[0]?.text}」** のタグを編集します`, 
-                    components: [row], 
-                    ephemeral: true
-                });
-            }
+                    const tagOptions = existingTags.slice(0, 24).map(tag => 
+                        new StringSelectMenuOptionBuilder()
+                            .setLabel(tag)
+                            .setValue(tag)
+                            .setDefault(targetWord.tag === tag)
+                    );
 
-            // C. タグ適用処理
-            if (i.isStringSelectMenu() && i.customId.startsWith('applyTag_')) {
-                const wordId = parseInt(i.customId.replace('applyTag_', ''));
-                const newTagRaw = i.values[0];
-                
-                // 🛑 ガード節を追加 (ここがエラーの原因でした！)
-                if (!newTagRaw) return;
+                    tagOptions.unshift(
+                        new StringSelectMenuOptionBuilder()
+                            .setLabel('❌ タグを削除 (未設定にする)')
+                            .setValue('__REMOVE_TAG__')
+                            .setDescription('タグを外します')
+                    );
 
-                const newTag = newTagRaw === '__REMOVE_TAG__' ? null : newTagRaw;
+                    const tagSelectMenu = new StringSelectMenuBuilder()
+                        .setCustomId(`applyTag_${selectedWordId}`)
+                        .setPlaceholder('付与するタグを選択してください')
+                        .addOptions(tagOptions);
 
-                // DB更新
-                await prisma.word.update({
-                    where: { id: wordId },
-                    data: { tag: newTag }
-                });
+                    const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(tagSelectMenu);
 
-                // メモリ上のデータも更新
-                const wordIndex = allWords.findIndex(w => w.id === wordId);
-                if (wordIndex !== -1 && allWords[wordIndex]) {
-                    allWords[wordIndex]!.tag = newTag;
+                    await i.reply({ 
+                        content: `**「${targetWord.titles[0]?.text}」** のタグを編集します`, 
+                        components: [row], 
+                        ephemeral: true
+                    });
                 }
 
-                await i.update({ 
-                    content: `✅ タグを **${newTag || 'なし'}** に変更しました！`, 
-                    components: [] 
-                });
-                
-                await interaction.editReply(generateView(currentPage));
+                // C. タグ適用処理
+                if (i.isStringSelectMenu() && i.customId.startsWith('applyTag_')) {
+                    // ⏳ ここが重要！すぐに「処理中」と伝える
+                    await i.deferUpdate();
+
+                    const wordId = parseInt(i.customId.replace('applyTag_', ''));
+                    const newTagRaw = i.values[0];
+                    if (!newTagRaw) return;
+
+                    const newTag = newTagRaw === '__REMOVE_TAG__' ? null : newTagRaw;
+
+                    // DB更新
+                    await prisma.word.update({
+                        where: { id: wordId },
+                        data: { tag: newTag }
+                    });
+
+                    // メモリ上のデータも更新
+                    const wordIndex = allWords.findIndex(w => w.id === wordId);
+                    if (wordIndex !== -1 && allWords[wordIndex]) {
+                        allWords[wordIndex]!.tag = newTag;
+                    }
+
+                    // メニューを出した自分へのメッセージを更新
+                    await i.editReply({ 
+                        content: `✅ タグを **${newTag || 'なし'}** に変更しました！`, 
+                        components: [] 
+                    });
+                    
+                    // 大元のリストも更新
+                    await interaction.editReply(generateView(currentPage));
+                }
+
+            } catch (e) {
+                console.error('List Interaction Error:', e);
+                // エラー時はユーザーに伝える
+                if (!i.replied && !i.deferred) {
+                    await i.reply({ content: '❌ エラーが発生しました。', ephemeral: true }).catch(() => {});
+                }
             }
         });
 
