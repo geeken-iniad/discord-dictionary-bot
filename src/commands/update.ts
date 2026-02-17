@@ -35,7 +35,7 @@ export const updateCommand = async (interaction: ChatInputCommandInteraction) =>
 
     if (!subcommand) {
         await interaction.reply({ 
-            content: '⚠️ コマンドの形式が古いです！Discordを再読み込み(Ctrl+R)してください。', 
+            content: '⚠️ コマンドの形式が古いです!Discordを再読み込み(Ctrl+R)してください。', 
             flags: MessageFlags.Ephemeral 
         });
         return;
