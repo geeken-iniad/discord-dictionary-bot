@@ -31,7 +31,15 @@ export const data = new SlashCommandBuilder()
     );
 
 export const updateCommand = async (interaction: ChatInputCommandInteraction) => {
-    const subcommand = interaction.options.getSubcommand();
+    const subcommand = interaction.options.getSubcommand(false);
+
+    if (!subcommand) {
+        await interaction.reply({ 
+            content: '⚠️ コマンドの形式が古いです！Discordを再読み込み(Ctrl+R)してください。', 
+            flags: MessageFlags.Ephemeral 
+        });
+        return;
+    }
 
     if (subcommand === 'word') {
         await handleWordUpdate(interaction);
