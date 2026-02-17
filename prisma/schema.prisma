@@ -5,13 +5,10 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql" // ※SQLiteの場合は "sqlite" のままにしてください
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-
-
-// 1. 「意味」や「画像」を持つ本体
 model Word {
   id         Int      @id @default(autoincrement())
   meaning    String
@@ -20,16 +17,14 @@ model Word {
   link       String?
   tag        String?
   createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt  // 👈 これを追加してください！
   
   titles     Title[]
 }
 
-// 2. 「見出し語」専用のテーブル
 model Title {
   id     Int    @id @default(autoincrement())
-  text   String @unique // 単語そのもの (重複禁止)
-  
-  // 👇 Wordテーブルと紐付ける設定
+  text   String @unique
   word   Word   @relation(fields: [wordId], references: [id], onDelete: Cascade)
   wordId Int
 }
