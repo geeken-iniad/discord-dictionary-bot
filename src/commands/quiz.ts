@@ -1,5 +1,9 @@
-import { ChatInputCommandInteraction, EmbedBuilder, Colors, Message, TextChannel } from 'discord.js';
+import { ChatInputCommandInteraction,SlashCommandBuilder, EmbedBuilder, Colors, Message, TextChannel } from 'discord.js';
 import { prisma } from '../prismaClient';
+
+export const data =     new SlashCommandBuilder()
+        .setName('quiz')
+        .setDescription('登録された単語からクイズを出します');
 
 export const quizCommand = async (interaction: ChatInputCommandInteraction) => {
     try {

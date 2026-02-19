@@ -1,4 +1,9 @@
-import { ChatInputCommandInteraction, EmbedBuilder, Colors } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, Colors } from 'discord.js';
+import { prisma } from '../prismaClient';
+
+export const data  =  new SlashCommandBuilder()
+        .setName('introduction')
+        .setDescription('このBotの使い方と機能を紹介します');
 
 export const introductionCommand = async (interaction: ChatInputCommandInteraction) => {
     await interaction.deferReply();

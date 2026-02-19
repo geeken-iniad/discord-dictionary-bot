@@ -2,8 +2,21 @@ import {
     ChatInputCommandInteraction, 
     EmbedBuilder, 
     Colors, 
-    TextChannel 
+    TextChannel ,
+    SlashCommandBuilder
 } from 'discord.js';
+
+export const data =     new SlashCommandBuilder()
+        .setName('request')
+        .setDescription('辞書に登録してほしい単語を運営にリクエストします')
+        .addStringOption(option =>
+            option.setName('word')
+                .setDescription('リクエストしたい単語')
+                .setRequired(true))
+        .addStringOption(option =>
+            option.setName('comment')
+                .setDescription('補足や応援メッセージ (任意)')
+                .setRequired(false));
 
 export const requestCommand = async (interaction: ChatInputCommandInteraction) => {
     try {

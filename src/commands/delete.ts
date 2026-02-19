@@ -5,9 +5,18 @@ import {
     StringSelectMenuOptionBuilder, 
     ComponentType,
     EmbedBuilder,
+    SlashCommandBuilder,
     Colors
 } from 'discord.js';
 import { prisma } from '../prismaClient';
+
+export const data =     new SlashCommandBuilder()
+        .setName('delete')
+        .setDescription('単語を削除します')
+        .addStringOption(option =>
+            option.setName('word') // 👈 'word' に統一
+                .setDescription('削除する単語')
+                .setRequired(true));
 
 export const deleteCommand = async (interaction: ChatInputCommandInteraction) => {
     try {

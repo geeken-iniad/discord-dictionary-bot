@@ -5,11 +5,21 @@ import {
     ActionRowBuilder, 
     ButtonBuilder, 
     ButtonStyle,
+    SlashCommandBuilder,
     ComponentType 
 } from 'discord.js';
 import { prisma } from '../prismaClient';
 import * as Levenshtein from 'fast-levenshtein'; // 👈 importの書き方を安全にしました
 const { get } = Levenshtein;
+
+export const data =     new SlashCommandBuilder()
+        .setName('keyword') // ※コマンド名はsearchではなくkeywordオプションを使う
+        .setName('search')
+        .setDescription('単語を検索します')
+        .addStringOption(option =>
+            option.setName('keyword') // searchだけは 'keyword' のままでOK
+                .setDescription('検索したい文字')
+                .setRequired(true));
 
 // 🪄 魔法の関数: 文字を「小文字」かつ「カタカナ」に統一する
 function normalize(str: string): string {

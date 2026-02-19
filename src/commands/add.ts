@@ -1,5 +1,37 @@
-import { ChatInputCommandInteraction } from 'discord.js';
+import { ChatInputCommandInteraction, SlashCommandBuilder ,ApplicationCommandType,ContextMenuCommandBuilder} from 'discord.js';
 import { prisma } from '../prismaClient';
+
+export const addFromMeaningData = new ContextMenuCommandBuilder()
+    .setName('📖 意味を引用して登録')
+    .setType(ApplicationCommandType.Message);
+
+export const addFromWordData = new ContextMenuCommandBuilder()
+    .setName('🔖 単語名を引用して登録')
+    .setType(ApplicationCommandType.Message);
+
+export const data =   new SlashCommandBuilder()
+        .setName('add')
+        .setDescription('単語を登録します')
+        .addStringOption(option =>
+            option.setName('word')
+                .setDescription('単語 (通常: "りんご/Apple" / 一括: "A=意味 | B=意味")')
+                .setRequired(true))
+        .addStringOption(option =>
+            option.setName('meaning')
+                .setDescription('意味 (一括登録の場合は空欄)')
+                .setRequired(false))
+        .addStringOption(option =>  // 👈 追加
+            option.setName('link')
+                .setDescription('参考リンク (URL)')
+                .setRequired(false))
+        .addAttachmentOption(option => 
+            option.setName('image')
+                .setDescription('画像')
+                .setRequired(false))
+        .addStringOption(option =>   // 👈 追加
+            option.setName('tag')
+                .setDescription('タグ/カテゴリー (例: プログラミング, 料理)')
+                .setRequired(false));
 
 export const addCommand = async (interaction: ChatInputCommandInteraction) => {
     try {

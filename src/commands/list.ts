@@ -10,11 +10,19 @@ import {
     InteractionReplyOptions, 
     MessageFlags,
     ComponentType,
+    SlashCommandBuilder,
     StringSelectMenuInteraction // 👈 追加！
 } from 'discord.js';
 import { prisma } from '../prismaClient';
 
 const ITEMS_PER_PAGE = 10; 
+
+export const data =     new SlashCommandBuilder()
+        .setName('list')
+        .setDescription('登録された単語の一覧を表示します')
+        .addStringOption(option =>   // 👈 追加
+            option.setName('tag')
+                .setDescription('このタグが付いた単語だけを表示'));
 
 export const listCommand = async (interaction: ChatInputCommandInteraction) => {
     try {

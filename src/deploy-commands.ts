@@ -1,135 +1,68 @@
-import { REST, Routes, ContextMenuCommandBuilder, ApplicationCommandType, SlashCommandBuilder } from 'discord.js';
+import { REST, Routes } from 'discord.js';
 import dotenv from 'dotenv';
+
+// 1. 各コマンドファイルから「コマンド定義 (data)」をインポートします
+// ※ ファイルの場所は適宜調整してください
+import { data as updateData } from './commands/update';
+import { data as listData } from './commands/list';
+import { data as addData,
+    addFromMeaningData, // 👈 追加
+    addFromWordData
+ } from './commands/add';
+import { data as deleteData } from './commands/delete';
+import { data as searchData } from './commands/search'; // ファイル名が search.ts の場合
+import { data as introData } from './commands/introduction'; // introduction.ts
+import { data as requestData } from './commands/request'; // request.ts
+
+// もし ContextMenu も別ファイルにしているならインポート。
+// まだファイルがないなら、ここ（deploy-commands.ts）に直接書いてもOKですが、
+// 今回は「update」を直すのが最優先なので、updateだけは絶対にインポートを使います。
 
 dotenv.config();
 
 const commands = [
-    // /add
-
-    // SlashCommnedBuilderから設定できる。その後は.addなんとかで各項目の設定
-    new SlashCommandBuilder()
-        .setName('add')
-        .setDescription('単語を登録します')
-        .addStringOption(option =>
-            option.setName('word')
-                .setDescription('単語 (通常: "りんご/Apple" / 一括: "A=意味 | B=意味")')
-                .setRequired(true))
-        .addStringOption(option =>
-            option.setName('meaning')
-                .setDescription('意味 (一括登録の場合は空欄)')
-                .setRequired(false))
-        .addStringOption(option =>  // 👈 追加
-            option.setName('link')
-                .setDescription('参考リンク (URL)')
-                .setRequired(false))
-        .addAttachmentOption(option => 
-            option.setName('image')
-                .setDescription('画像')
-                .setRequired(false))
-        .addStringOption(option =>   // 👈 追加
-            option.setName('tag')
-                .setDescription('タグ/カテゴリー (例: プログラミング, 料理)')
-                .setRequired(false)),
-
-    // /list
-    new SlashCommandBuilder()
-        .setName('list')
-        .setDescription('登録された単語の一覧を表示します')
-        .addStringOption(option =>   // 👈 追加
-            option.setName('tag')
-                .setDescription('このタグが付いた単語だけを表示')),
-
-    // /delete
-    new SlashCommandBuilder()
-        .setName('delete')
-        .setDescription('単語を削除します')
-        .addStringOption(option =>
-            option.setName('word') // 👈 'word' に統一
-                .setDescription('削除する単語')
-                .setRequired(true)),
-
-    // /update
-    new SlashCommandBuilder()
-        .setName('update')
-        .setDescription('編集フォームを開いて更新します')
-        .addStringOption(option =>
-            option.setName('word')
-                .setDescription('編集したい単語')
-                .setRequired(true))
-        .addAttachmentOption(option => 
-            option.setName('image')
-                .setDescription('新しい画像')
-                .setRequired(false)),
+    updateData.toJSON(), // 👈 これで新しい「サブコマンド付きupdate」が登録されます！
+    listData.toJSON(),
+    addData.toJSON(),
+    addFromMeaningData.toJSON(), // 👈 配列に追加
+    addFromWordData.toJSON(),
+    deleteData.toJSON(),
+    searchData.toJSON(),
+    introData.toJSON(),
+    requestData.toJSON(),
     
-    // /search
-    new SlashCommandBuilder()
-        .setName('keyword') // ※コマンド名はsearchではなくkeywordオプションを使う
-        .setName('search')
-        .setDescription('単語を検索します')
-        .addStringOption(option =>
-            option.setName('keyword') // searchだけは 'keyword' のままでOK
-                .setDescription('検索したい文字')
-                .setRequired(true)),
-
-    // /quiz
-    new SlashCommandBuilder()
-        .setName('quiz')
-        .setDescription('登録された単語からクイズを出します'),
-        
-    new SlashCommandBuilder()
-        .setName('introduction')
-        .setDescription('このBotの使い方と機能を紹介します'),
-
-    new SlashCommandBuilder()
-        .setName('request')
-        .setDescription('辞書に登録してほしい単語を運営にリクエストします')
-        .addStringOption(option =>
-            option.setName('word')
-                .setDescription('リクエストしたい単語')
-                .setRequired(true))
-        .addStringOption(option =>
-            option.setName('comment')
-                .setDescription('補足や応援メッセージ (任意)')
-                .setRequired(false)),
-
-    // ① 既存のやつ (名前を分かりやすく変更推奨)
-    new ContextMenuCommandBuilder()
-        .setName('📖 意味を引用して登録') // 👈 変更
-        .setType(ApplicationCommandType.Message),
-
-    // ② 新しく追加するやつ
-    new ContextMenuCommandBuilder()
-        .setName('🔖 単語名を引用して登録') // 👈 追加！
-        .setType(ApplicationCommandType.Message),
+    // コンテキストメニュー（もしファイルがないなら、一旦ここに直接書いてもOK）
+    // 必要ならここに ContextMenuCommandBuilder の .toJSON() を追加
 ];
 
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN!);
-
-// src/deploy-commands.ts の後半部分
 
 (async () => {
     try {
         console.log('📦 コマンドの登録を開始します...');
 
-        // 1. グローバルコマンド（どこでも使えるやつ）を上書き登録
-        await rest.put(
-            Routes.applicationCommands(process.env.APPLICATION_ID!),
-            { body: commands },
-        );
-        console.log('✅ グローバルコマンドの登録完了！');
+        const clientId = process.env.APPLICATION_ID!;
+        const guildId = process.env.GUILD_ID!; // 開発用サーバーID
 
-        // 👇 2. 【追加】古い「サーバー専用コマンド」があれば削除する
-        // (もし .env に GUILD_ID があれば実行)
-        if (process.env.GUILD_ID) {
-            console.log('🗑️ 古いサーバー専用コマンドを削除中...');
+        // ⚠️ 重要：開発中は「サーバー専用コマンド」を使う（反映が早いから）
+        
+        // 1. グローバルコマンド（反映が遅い）を一旦消す
+        // （二重登録を防ぐため）
+        await rest.put(Routes.applicationCommands(clientId), { body: [] });
+        console.log('🗑️ 古いグローバルコマンドを削除しました');
+
+        // 2. サーバー専用コマンドとして登録（即時反映！）
+        if (guildId) {
             await rest.put(
-                Routes.applicationGuildCommands(process.env.APPLICATION_ID!, process.env.GUILD_ID),
-                { body: [] }, // 空っぽのリストを送って全消去
+                Routes.applicationGuildCommands(clientId, guildId),
+                { body: commands },
             );
-            console.log('✨ サーバー専用コマンドを削除しました！');
+            console.log('✅ サーバー専用コマンドを登録しました！即反映されるはずです！');
+        } else {
+            console.warn('⚠️ GUILD_ID が設定されていません。.envを確認してください。');
         }
 
     } catch (error) {
-        console.error(error);
+        console.error('❌ コマンド登録エラー:', error);
     }
 })();

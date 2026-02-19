@@ -15,6 +15,7 @@ import {
 } from 'discord.js';
 import { prisma } from '../prismaClient';
 
+
 // コマンド定義
 export const data = new SlashCommandBuilder()
     .setName('update')
