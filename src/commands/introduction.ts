@@ -1,5 +1,4 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, EmbedBuilder, Colors } from 'discord.js';
-import { prisma } from '../prismaClient';
 
 export const data  =  new SlashCommandBuilder()
         .setName('introduction')
