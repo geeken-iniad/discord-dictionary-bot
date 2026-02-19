@@ -1,4 +1,4 @@
-import { ChatInputCommandInteraction, SlashCommandBuilder ,ApplicationCommandType,ContextMenuCommandBuilder} from 'discord.js';
+import { ChatInputCommandInteraction, SlashCommandBuilder ,ApplicationCommandType,ContextMenuCommandBuilder, MessageContextMenuCommandInteraction, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, MessageFlags} from 'discord.js';
 import { prisma } from '../prismaClient';
 
 export const addFromMeaningData = new ContextMenuCommandBuilder()
@@ -135,5 +135,59 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
     } catch (error) {
         console.error(error);
         await interaction.editReply('❌ エラーが発生しました。');
+    }
+};
+
+export const contextAddCommand = async (interaction: MessageContextMenuCommandInteraction) => {
+    try {
+        // どのメニューが押されたかで処理を分ける
+        const targetMessage = interaction.targetMessage;
+        const textContent = targetMessage.content;
+
+        let modalTitle = '';
+        let defaultWord = '';
+        let defaultMeaning = '';
+
+        if (interaction.commandName === '📖 意味を引用して登録') {
+            modalTitle = '引用登録 (意味)';
+            defaultMeaning = textContent; // メッセージ内容を「意味」に入れる
+        } else if (interaction.commandName === '🔖 単語名を引用して登録') {
+            modalTitle = '引用登録 (単語名)';
+            defaultWord = textContent;    // メッセージ内容を「単語名」に入れる
+        } else {
+            return; // 知らないコマンドなら何もしない
+        }
+
+        // モーダル（入力フォーム）を作る
+        const modal = new ModalBuilder()
+            .setCustomId('addWordModal_Context') // 通常の登録とは区別するID
+            .setTitle(modalTitle);
+
+        const wordInput = new TextInputBuilder()
+            .setCustomId('wordInput')
+            .setLabel('単語')
+            .setStyle(TextInputStyle.Short)
+            .setValue(defaultWord.substring(0, 100)) // 長すぎるとエラーになるのでカット
+            .setRequired(true);
+
+        const meaningInput = new TextInputBuilder()
+            .setCustomId('meaningInput')
+            .setLabel('意味')
+            .setStyle(TextInputStyle.Paragraph)
+            .setValue(defaultMeaning.substring(0, 3900))
+            .setRequired(true);
+
+        // 必要ならリンクやタグも追加できますが、一旦シンプルに必須項目だけで
+        
+        modal.addComponents(
+            new ActionRowBuilder<TextInputBuilder>().addComponents(wordInput),
+            new ActionRowBuilder<TextInputBuilder>().addComponents(meaningInput)
+        );
+
+        await interaction.showModal(modal);
+
+    } catch (error) {
+        console.error(error);
+        await interaction.reply({ content: '❌ エラーが発生しました。', flags: MessageFlags.Ephemeral });
     }
 };
