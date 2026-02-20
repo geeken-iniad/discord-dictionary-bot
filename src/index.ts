@@ -13,6 +13,8 @@ import * as commands from './commands';
 import { handleMessage } from './events/messageHandler';
 
 dotenv.config();
+const replyCooldowns = new Map<string, number>();
+const COOLDOWN_TIME = 60 * 60 * 1000;
 
 const client = new Client({
     intents: [
@@ -37,6 +39,39 @@ const commandMap: { [key: string]: (interaction: any) => Promise<void> } = {
     'introduction': commands.introductionCommand,
     'request': commands.requestCommand,
 };
+
+client.on('messageCreate', async (message) => {
+    // Bot自身の発言には反応しない
+    if (message.author.bot) return;
+
+    // 👇 ② ストッパー（クールダウン判定）をここに入れます
+    const guildId = message.guildId || 'DM'; // どのサーバーからのメッセージか確認
+    const lastReplyTime = replyCooldowns.get(guildId) || 0; // 前回反応した時間を取得（初めてなら0）
+    const now = Date.now(); // 今の時間
+
+    // 前回の反応から1時間（COOLDOWN_TIME）経っていなければ、ここで処理を終了（無視）する！
+    if (now - lastReplyTime < COOLDOWN_TIME) {
+        return; 
+    }
+
+    // ==========================================
+    // 👇 ③ ここに「単語に反応して意味を返す」などの、実際の処理を書きます
+    // (既に書かれているコードがあれば、そのまま残してください)
+    
+    // 例: 単語が含まれているかチェックして、返信する処理
+    // const hasWord = ... 
+    // if (hasWord) {
+    //     await message.reply('意味は〇〇です！');
+    // ==========================================
+
+        // 👇 ④ 【重要】Botが反応（返信）し終わったら、「今反応したよ！」とメモ帳に時間を書き込みます
+        replyCooldowns.set(guildId, now);
+        console.log(`⏱️ サーバー(${guildId})で反応しました。ここから1時間おやすみします。`);
+        
+    // } // if(hasWord) の閉じカッコなど
+});
+
+
 
 client.on(Events.InteractionCreate, async (interaction: Interaction) => {
     
