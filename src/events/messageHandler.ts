@@ -1,6 +1,10 @@
 import { ChannelType, Colors, EmbedBuilder, Message } from "discord.js";
 import { prisma } from "../prismaClient";
 
+// 👇 ① ファイルの外側にタイマー用のメモ帳を用意します
+const replyCooldowns = new Map<string, number>();
+const COOLDOWN_TIME = 60 * 60 * 1000; // 1時間 = 3,600,000ミリ秒
+
 // 正規化関数
 function normalize(str: string): string {
   return str
@@ -14,6 +18,15 @@ export const handleMessage = async (message: Message) => {
   // Bot自身の発言や、Botへのメンションなどは無視
   if (message.author.bot) return;
   if (!message.guild) return;
+
+  // 👇 ② 【チェック】DBを検索する前に、今おやすみ中か確認する
+  const guildId = message.guildId!; // 👈 最後に「!」をつけるだけ！
+  const lastReplyTime = replyCooldowns.get(guildId) || 0;
+  const now = Date.now();
+
+  if (now - lastReplyTime < COOLDOWN_TIME) {
+    return; // 1時間経っていなければ、ここで完全ストップ！（DBへの無駄な通信も防げます）
+  }
 
   try {
     // 1. URL除去 & 正規化
@@ -35,6 +48,7 @@ export const handleMessage = async (message: Message) => {
       return normalizedContent.includes(normalize(t.text));
     });
 
+    // 👇 ③ ここが重要！単語が見つからなかったらタイマーは動かさずに終了する
     if (hitTitles.length === 0) return;
 
     // 重複除去
@@ -75,6 +89,10 @@ export const handleMessage = async (message: Message) => {
           parse: [], // 本文中のメンションも全て無効化
         },
       });
+      
+      // 👇 ④-A スレッド内での返信成功後、タイマーをスタート！
+      replyCooldowns.set(guildId, Date.now());
+      console.log(`⏱️ サーバー(${guildId})で解説しました。1時間ストップします。`);
       return;
     }
 
@@ -99,6 +117,9 @@ export const handleMessage = async (message: Message) => {
           embeds: embeds,
           allowedMentions: { repliedUser: false, parse: [] },
         });
+        
+        // 👇 ④-B エラーからの通常返信成功後もタイマーをスタート！
+        replyCooldowns.set(guildId, Date.now());
         return;
       }
     }
@@ -110,6 +131,11 @@ export const handleMessage = async (message: Message) => {
       embeds: embeds,
       allowedMentions: { parse: [] }, // 👈 最強の通知カット設定
     });
+
+    // 👇 ④-C スレッド新規作成＆送信成功後、タイマーをスタート！
+    replyCooldowns.set(guildId, Date.now());
+    console.log(`⏱️ サーバー(${guildId})で解説しました。1時間ストップします。`);
+
   } catch (error) {
     console.error("AutoResponse Error:", error);
   }
