@@ -14,6 +14,10 @@ function normalize(str: string): string {
     .toLowerCase();
 }
 
+function escapeRegExp(str: string) {
+  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
 export const handleMessage = async (message: Message) => {
   if (message.author.bot) return;
   if (!message.guild) return;
@@ -38,9 +42,15 @@ export const handleMessage = async (message: Message) => {
 
     // 3. マッチング
     const hitTitles = allTitles.filter((t) => {
-      return normalizedContent.includes(normalize(t.text));
-    });
+      const targetWord = normalize(t.text);
+      const escapedWord = escapeRegExp(targetWord);
 
+      // (?<![a-z0-9_]) = 直前に英数字がない
+      // (?![a-z0-9_])  = 直後に英数字がない
+      const regex = new RegExp(`(?<![a-z0-9_])${escapedWord}(?![a-z0-9_])`);
+
+      return regex.test(normalizedContent);
+    });
     if (hitTitles.length === 0) return;
 
     // 重複除去して「ヒットしたWord」の配列(hits)を作る
