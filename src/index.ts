@@ -8,6 +8,7 @@ import {
   MessageFlags,
 } from "discord.js";
 import dotenv from "dotenv";
+import { prisma } from "./prismaClient";
 
 import * as commands from "./commands";
 import { handleMessage } from "./events/messageHandler";
@@ -100,6 +101,48 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
         } else {
           await interaction.reply(reply);
         }
+      }
+    }
+  }
+  else if (interaction.isModalSubmit()) {
+    if (interaction.customId === "addWordModal_Context") {
+      try {
+        // フォームに入力された値を受け取る
+        const inputWord = interaction.fields.getTextInputValue("wordInput");
+        const inputMeaning = interaction.fields.getTextInputValue("meaningInput");
+        
+        // 🌟 ここが最重要！今いるサーバーの名札をつける
+        const guildId = interaction.guildId || "global";
+
+        // 「りんご/Apple」のようにスラッシュ区切りに対応
+        const titles = inputWord
+          .split("/")
+          .map((t) => t.trim())
+          .filter((t) => t.length > 0);
+
+        // データベースに保存！
+        await prisma.word.create({
+          data: {
+            guildId: guildId, // 👈 サーバー名札！
+            meaning: inputMeaning,
+            authorName: interaction.user.username,
+            titles: {
+              create: titles.map((t) => ({ text: t })),
+            },
+          },
+        });
+
+        const joinedTitle = titles.join(" / ");
+        await interaction.reply({
+          content: `✅ 右クリックから **「${joinedTitle}」** を登録しました！`,
+        });
+
+      } catch (error) {
+        console.error(`Modal Submit Error`, error);
+        await interaction.reply({
+          content: "❌ 登録中にエラーが発生しました",
+          flags: MessageFlags.Ephemeral,
+        });
       }
     }
   }

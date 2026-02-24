@@ -35,31 +35,28 @@ export const data = new SlashCommandBuilder()
       .setDescription("意味 (一括登録の場合は空欄)")
       .setRequired(false),
   )
-  .addStringOption(
-    (
-      option, // 👈 追加
-    ) =>
-      option
-        .setName("link")
-        .setDescription("参考リンク (URL)")
-        .setRequired(false),
+  .addStringOption((option) =>
+    option
+      .setName("link")
+      .setDescription("参考リンク (URL)")
+      .setRequired(false),
   )
   .addAttachmentOption((option) =>
     option.setName("image").setDescription("画像").setRequired(false),
   )
-  .addStringOption(
-    (
-      option, // 👈 追加
-    ) =>
-      option
-        .setName("tag")
-        .setDescription("タグ/カテゴリー (例: プログラミング, 料理)")
-        .setRequired(false),
+  .addStringOption((option) =>
+    option
+      .setName("tag")
+      .setDescription("タグ/カテゴリー (例: プログラミング, 料理)")
+      .setRequired(false),
   );
 
 export const addCommand = async (interaction: ChatInputCommandInteraction) => {
   try {
     await interaction.deferReply();
+
+    // 👇 【追加】今いるサーバーのIDを取得！(DMの場合は "global" にする)
+    const guildId = interaction.guildId || "global";
 
     const inputWord = interaction.options.getString("word");
     const inputMeaning = interaction.options.getString("meaning");
@@ -73,7 +70,6 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
     // パターンA: 通常モード (意味が入力されている場合)
     // ---------------------------------------------------
     if (inputMeaning) {
-      // 今まで通りの処理
       const titles = inputWord
         .split("/")
         .map((t) => t.trim())
@@ -81,6 +77,7 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
 
       await prisma.word.create({
         data: {
+          guildId: guildId, // 👈 【追加】サーバー名札をつける！
           meaning: inputMeaning,
           imageUrl: image ? image.url : null,
           link: inputLink,
@@ -99,16 +96,13 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
 
     // ---------------------------------------------------
     // パターンB: 一括登録モード (意味が空欄の場合)
-    // フォーマット: "単語=意味 | 単語=意味"
     // ---------------------------------------------------
 
-    // 1. "|" で区切って複数の塊にする
     const entries = inputWord
       .split("|")
       .map((e) => e.trim())
       .filter((e) => e.length > 0);
 
-    // フォーマットチェック ( "=" が入っていないとダメ)
     const validEntries = entries.filter((e) => e.includes("="));
 
     if (validEntries.length === 0) {
@@ -121,9 +115,7 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
     let successCount = 0;
     const failedWords: string[] = [];
 
-    // 2. ループして登録！
     for (const entry of validEntries) {
-      // "りんご/Apple = 赤い果物" を "=" で分割
       const [titlePart, meaningPart] = entry.split("=").map((s) => s.trim());
 
       if (!titlePart || !meaningPart) {
@@ -131,7 +123,6 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
         continue;
       }
 
-      // タイトル分割 (例: "りんご/Apple")
       const titles = titlePart
         .split("/")
         .map((t) => t.trim())
@@ -140,8 +131,8 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
       try {
         await prisma.word.create({
           data: {
+            guildId: guildId, // 👈 【追加】ここにもサーバー名札をつける！
             meaning: meaningPart,
-            // 画像はとりあえず「最初の1個」にだけつける（仕様はお好みで）
             imageUrl: successCount === 0 && image ? image.url : null,
             link: successCount === 0 && inputLink ? inputLink : null,
             tag: inputTag,
@@ -153,12 +144,10 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
         });
         successCount++;
       } catch (error) {
-        // 重複エラーなどはここに来る
         failedWords.push(titlePart);
       }
     }
 
-    // 3. 結果表示
     let resultMsg = `📦 **一括登録完了！** (${successCount}件)`;
 
     if (failedWords.length > 0) {
@@ -176,7 +165,6 @@ export const contextAddCommand = async (
   interaction: MessageContextMenuCommandInteraction,
 ) => {
   try {
-    // どのメニューが押されたかで処理を分ける
     const targetMessage = interaction.targetMessage;
     const textContent = targetMessage.content;
 
@@ -186,24 +174,23 @@ export const contextAddCommand = async (
 
     if (interaction.commandName === "📖 意味を引用して登録") {
       modalTitle = "引用登録 (意味)";
-      defaultMeaning = textContent; // メッセージ内容を「意味」に入れる
+      defaultMeaning = textContent;
     } else if (interaction.commandName === "🔖 単語名を引用して登録") {
       modalTitle = "引用登録 (単語名)";
-      defaultWord = textContent; // メッセージ内容を「単語名」に入れる
+      defaultWord = textContent;
     } else {
-      return; // 知らないコマンドなら何もしない
+      return; 
     }
 
-    // モーダル（入力フォーム）を作る
     const modal = new ModalBuilder()
-      .setCustomId("addWordModal_Context") // 通常の登録とは区別するID
+      .setCustomId("addWordModal_Context")
       .setTitle(modalTitle);
 
     const wordInput = new TextInputBuilder()
       .setCustomId("wordInput")
       .setLabel("単語")
       .setStyle(TextInputStyle.Short)
-      .setValue(defaultWord.substring(0, 100)) // 長すぎるとエラーになるのでカット
+      .setValue(defaultWord.substring(0, 100))
       .setRequired(true);
 
     const meaningInput = new TextInputBuilder()
@@ -212,8 +199,6 @@ export const contextAddCommand = async (
       .setStyle(TextInputStyle.Paragraph)
       .setValue(defaultMeaning.substring(0, 3900))
       .setRequired(true);
-
-    // 必要ならリンクやタグも追加できますが、一旦シンプルに必須項目だけで
 
     modal.addComponents(
       new ActionRowBuilder<TextInputBuilder>().addComponents(wordInput),
