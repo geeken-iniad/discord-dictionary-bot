@@ -10,7 +10,7 @@ import {
   MessageFlags,
   SlashCommandBuilder,
   StringSelectMenuBuilder,
-  StringSelectMenuInteraction, // 👈 追加！
+  StringSelectMenuInteraction,
   StringSelectMenuOptionBuilder,
 } from "discord.js";
 import { prisma } from "../prismaClient";
@@ -20,26 +20,34 @@ const ITEMS_PER_PAGE = 10;
 export const data = new SlashCommandBuilder()
   .setName("list")
   .setDescription("登録された単語の一覧を表示します")
-  .addStringOption(
-    (
-      option, // 👈 追加
-    ) => option.setName("tag").setDescription("このタグが付いた単語だけを表示"),
+  .addStringOption((option) =>
+    option.setName("tag").setDescription("このタグが付いた単語だけを表示"),
   );
 
 export const listCommand = async (interaction: ChatInputCommandInteraction) => {
   try {
     await interaction.deferReply();
+    
+    // 👇 【追加】今いるサーバーのIDを取得！
+    const guildId = interaction.guildId || "global";
     const filterTag = interaction.options.getString("tag");
-    const whereClause = filterTag ? { tag: filterTag } : {};
+    
+    // 👇 【修正】検索条件に必ず「このサーバーのデータだけ」を含める！
+    const whereClause = filterTag 
+      ? { guildId: guildId, tag: filterTag } 
+      : { guildId: guildId };
 
-    // 1. 総数を取得
+    // 1. 総数を取得 (このサーバー内の総数になる)
     const totalCount = await prisma.word.count({ where: whereClause });
     const maxPage = Math.max(0, Math.ceil(totalCount / ITEMS_PER_PAGE) - 1);
 
-    // 2. タグ一覧を取得
+    // 2. タグ一覧を取得 (このサーバーで使われているタグだけになる)
     const existingTagsRaw = await prisma.word.groupBy({
       by: ["tag"],
-      where: { tag: { not: null } },
+      where: { 
+        guildId: guildId, // 👈 ここにも追加！
+        tag: { not: null } 
+      },
     });
     const existingTags = existingTagsRaw
       .map((t) => t.tag)
@@ -48,7 +56,7 @@ export const listCommand = async (interaction: ChatInputCommandInteraction) => {
     // ▼ データ取得関数
     const fetchPageData = async (page: number) => {
       return await prisma.word.findMany({
-        where: whereClause,
+        where: whereClause, // 👈 ここは上で設定した whereClause がそのまま使われます
         include: { titles: true },
         orderBy: { createdAt: "desc" },
         skip: page * ITEMS_PER_PAGE,
@@ -219,7 +227,6 @@ export const listCommand = async (interaction: ChatInputCommandInteraction) => {
             fetchReply: true,
           });
 
-          // 👇 ここを修正しました！ (subI に型を付けました)
           try {
             const selection = await popupMessage.awaitMessageComponent({
               componentType: ComponentType.StringSelect,
