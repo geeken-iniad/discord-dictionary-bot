@@ -1,9 +1,9 @@
 import { ChannelType, Colors, EmbedBuilder, Message } from "discord.js";
 import { prisma } from "../prismaClient";
 
-// 👇 ① ファイルの外側にタイマー用のメモ帳を用意します
+// ⏱️ タイマー用のメモ帳
 const replyCooldowns = new Map<string, number>();
-const COOLDOWN_TIME = 60 * 60 * 1000; // 1時間 = 3,600,000ミリ秒
+const COOLDOWN_TIME = 60 * 60 * 1000; // 1時間
 
 // 正規化関数
 function normalize(str: string): string {
@@ -15,18 +15,11 @@ function normalize(str: string): string {
 }
 
 export const handleMessage = async (message: Message) => {
-  // Bot自身の発言や、Botへのメンションなどは無視
   if (message.author.bot) return;
   if (!message.guild) return;
 
-  // 👇 ② 【チェック】DBを検索する前に、今おやすみ中か確認する
-  const channelId = message.channelId; // 👈 ここを channelId に変更！
-  const lastReplyTime = replyCooldowns.get(channelId) || 0; // 👈 ここも！
-  const now = Date.now();
-
-  if (now - lastReplyTime < COOLDOWN_TIME) {
-    return; // 1時間経っていなければ、ここで完全ストップ！（DBへの無駄な通信も防げます）
-  }
+  // ⚠️ ここにあった事前ストッパーは削除しました！
+  // （どの単語が言われたか調べる前には止められないため）
 
   try {
     // 1. URL除去 & 正規化
@@ -34,7 +27,7 @@ export const handleMessage = async (message: Message) => {
     if (!contentWithoutUrl.trim()) return;
     const normalizedContent = normalize(contentWithoutUrl);
 
-    // 2. DBから単語取得 (includeの階層を深くしてエラー回避)
+    // 2. DBから単語取得
     const allTitles = await prisma.title.findMany({
       include: {
         word: {
@@ -48,15 +41,31 @@ export const handleMessage = async (message: Message) => {
       return normalizedContent.includes(normalize(t.text));
     });
 
-    // 👇 ③ ここが重要！単語が見つからなかったらタイマーは動かさずに終了する
     if (hitTitles.length === 0) return;
 
-    // 重複除去
+    // 重複除去して「ヒットしたWord」の配列(hits)を作る
     const uniqueWords = new Map();
     hitTitles.forEach((t) => uniqueWords.set(t.wordId, t.word));
-    const hits = Array.from(uniqueWords.values());
+    let hits = Array.from(uniqueWords.values());
 
-    // 4. 解説Embedを作成
+    // ==========================================
+    // 👇 新しいストッパー（単語ごとの連投防止）
+    // ==========================================
+    const now = Date.now();
+    const channelId = message.channelId;
+
+    // ヒットした単語の中から、「まだ1時間経っていない単語」を除外する
+    hits = hits.filter((word) => {
+      const key = `${channelId}_${word.id}`; // カギを「チャンネルID_単語ID」にする
+      const lastReplyTime = replyCooldowns.get(key) || 0;
+      return now - lastReplyTime >= COOLDOWN_TIME; // 1時間経っているものだけ残す
+    });
+
+    // もし全部の単語がクールダウン中だったら、ここで処理終了！
+    if (hits.length === 0) return;
+    // ==========================================
+
+    // 4. 解説Embedを作成 (生き残った単語だけで作る)
     const embeds = hits.map((word) => {
       const titleText =
         word.titles && word.titles.length > 0 ? word.titles[0].text : "詳細";
@@ -65,7 +74,7 @@ export const handleMessage = async (message: Message) => {
         .setColor(Colors.Blue)
         .setTitle(`📚 解説: ${titleText}`)
         .setDescription(word.meaning)
-        .setFooter({ text: "💡 連続での反応は制限されています" });
+        .setFooter({ text: "💡 同じ単語の連続反応は制限されています" });
 
       if (word.imageUrl) embed.setImage(word.imageUrl);
       if (word.link) embed.setURL(word.link);
@@ -75,66 +84,61 @@ export const handleMessage = async (message: Message) => {
       return embed;
     });
 
-    // 5. 送信処理 (最強のサイレントモード)
+    // 👇 タイマーをセットする共通の関数
+    const setCooldowns = () => {
+      hits.forEach((word) => {
+        const key = `${channelId}_${word.id}`;
+        replyCooldowns.set(key, Date.now());
+      });
+      console.log(`⏱️ チャンネル(${channelId})で ${hits.length}個の単語を解説。これらは1時間休止します。`);
+    };
 
-    // ▼ 既にスレッドの中なら、返信(reply)して通知をOFFにする
+    // 5. 送信処理
+
+    // ▼ 既にスレッドの中なら、返信(reply)
     if (
       message.channel.type === ChannelType.PublicThread ||
       message.channel.type === ChannelType.PrivateThread
     ) {
       await message.reply({
         embeds: embeds,
-        allowedMentions: {
-          repliedUser: false, // 相手への通知OFF
-          parse: [], // 本文中のメンションも全て無効化
-        },
+        allowedMentions: { repliedUser: false, parse: [] },
       });
       
-      // 👇 ④-A スレッド内での返信成功後、タイマーをスタート！
-      replyCooldowns.set(channelId, Date.now());
-      console.log(`⏱️ サーバー(${channelId})で解説しました。1時間ストップします。`);
+      setCooldowns(); // 送信成功後にタイマーセット！
       return;
     }
 
     // ▼ 通常チャンネルなら、スレッドを作ってそこに投稿する
     let thread = message.thread;
-
-    // まだスレッドがなければ作る
     if (!thread) {
       try {
-        if (!hitTitles[0]) return;
-
-        // ⚠️ Discordの仕様上、ここの「スレッド作成通知」だけは相手に届いてしまいます
         thread = await message.startThread({
-          name: `解説: ${hitTitles[0].text}`,
+          // ※ヒットした単語のうち、最初の単語の名前をスレッド名にする
+          name: `解説: ${hitTitles.find(t => t.wordId === hits[0].id)?.text || "用語"}`,
           autoArchiveDuration: 60,
           reason: "用語解説のため",
         });
       } catch (e) {
         console.error(e);
-        // エラー時は普通に返信（ここも通知OFF）
         await message.reply({
           embeds: embeds,
           allowedMentions: { repliedUser: false, parse: [] },
         });
         
-        // 👇 ④-B エラーからの通常返信成功後もタイマーをスタート！
-        replyCooldowns.set(channelId, Date.now());
+        setCooldowns();
         return;
       }
     }
 
     // スレッドの中に書き込む
-    // replyではなくsendを使うことで、さらに通知のリスクを下げる
     await thread.send({
       content: "用語が見つかりました！",
       embeds: embeds,
-      allowedMentions: { parse: [] }, // 👈 最強の通知カット設定
+      allowedMentions: { parse: [] },
     });
 
-    // 👇 ④-C スレッド新規作成＆送信成功後、タイマーをスタート！
-    replyCooldowns.set(channelId, Date.now());
-    console.log(`⏱️ サーバー(${channelId})で解説しました。1時間ストップします。`);
+    setCooldowns(); // 送信成功後にタイマーセット！
 
   } catch (error) {
     console.error("AutoResponse Error:", error);
