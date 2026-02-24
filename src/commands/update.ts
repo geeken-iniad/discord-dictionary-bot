@@ -62,9 +62,13 @@ export const updateCommand = async (
 // ---------------------------------------------------------
 async function handleWordUpdate(interaction: ChatInputCommandInteraction) {
   const wordText = interaction.options.getString("word", true);
+  
+  // 👇 【追加】今いるサーバーのIDを取得！
+  const guildId = interaction.guildId || "global";
 
   const word = await prisma.word.findFirst({
     where: {
+      guildId: guildId, // 👈 【修正】このサーバーの単語だけを探す！
       titles: { some: { text: wordText } },
     },
     include: { titles: true },
@@ -147,7 +151,10 @@ async function handleWordUpdate(interaction: ChatInputCommandInteraction) {
         .map((s) => s.trim())
         .filter((s) => s);
       for (const alias of aliases) {
-        const exists = await prisma.title.findFirst({ where: { text: alias } });
+        // ※別名を追加するときも、念のため同じ名前がないか確認
+        const exists = await prisma.title.findFirst({
+          where: { text: alias, wordId: word.id },
+        });
         if (!exists) {
           await prisma.title.create({
             data: {
@@ -175,15 +182,19 @@ async function handleTagsUpdate(interaction: ChatInputCommandInteraction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const keyword = interaction.options.getString("keyword") || "";
+    
+    // 👇 【追加】今いるサーバーのIDを取得！
+    const guildId = interaction.guildId || "global";
 
     const targets = await prisma.word.findMany({
       where: keyword
         ? {
+            guildId: guildId, // 👈 【修正】検索条件がある場合
             titles: { some: { text: { contains: keyword } } },
           }
-        : {},
+        : { guildId: guildId }, // 👈 【修正】検索条件がない（空欄の）場合もサーバーで絞る
       include: { titles: true },
-      orderBy: { updatedAt: "desc" }, // 👈 schema更新でこれが動くようになります
+      orderBy: { updatedAt: "desc" },
       take: 25,
     });
 
@@ -224,10 +235,15 @@ async function handleTagsUpdate(interaction: ChatInputCommandInteraction) {
 
     const selectedWordIds = selection.values.map((v) => parseInt(v));
 
+    // 👇 【修正】タグの一覧を出す時も、このサーバーのタグだけにする！
     const existingTagsRaw = await prisma.word.groupBy({
       by: ["tag"],
-      where: { tag: { not: null } },
+      where: { 
+        guildId: guildId, // 👈 これを追加
+        tag: { not: null } 
+      },
     });
+    
     const existingTags = existingTagsRaw
       .map((t) => t.tag)
       .filter((t): t is string => !!t);
@@ -269,7 +285,6 @@ async function handleTagsUpdate(interaction: ChatInputCommandInteraction) {
 
     let finalTag: string | null = null;
 
-    // 🛑 ここを修正: undefined チェックを追加して型エラーを回避
     const selectedVal = tagSelection.values[0];
     if (!selectedVal) return;
 

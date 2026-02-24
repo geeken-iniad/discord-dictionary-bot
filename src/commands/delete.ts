@@ -30,9 +30,18 @@ export const deleteCommand = async (
     const targetText = interaction.options.getString("word");
     if (!targetText) return;
 
+    // 👇 【追加】今いるサーバーのIDを取得！
+    const guildId = interaction.guildId || "global";
+
     // 1. 入力された単語から、親(Word)と兄弟(Titles)を全部探す
     const targetTitle = await prisma.title.findFirst({
-      where: { text: targetText },
+      where: { 
+        text: targetText,
+        // 👇 【修正】「このサーバーの単語」だけを対象にする！
+        word: {
+          guildId: guildId 
+        }
+      },
       include: {
         word: {
           include: { titles: true }, // 兄弟たちも持ってくる

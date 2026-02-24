@@ -22,17 +22,23 @@ export const handleMessage = async (message: Message) => {
   if (message.author.bot) return;
   if (!message.guild) return;
 
-  // ⚠️ ここにあった事前ストッパーは削除しました！
-  // （どの単語が言われたか調べる前には止められないため）
-
   try {
     // 1. URL除去 & 正規化
     const contentWithoutUrl = message.content.replace(/https?:\/\/[^\s]+/g, "");
     if (!contentWithoutUrl.trim()) return;
     const normalizedContent = normalize(contentWithoutUrl);
 
+    // 👇 【追加】今いるサーバーのIDを取得！
+    const guildId = message.guildId!;
+
     // 2. DBから単語取得
+    // 👇 【修正】「このサーバーの単語のタイトル」だけを取得するように where を追加！
     const allTitles = await prisma.title.findMany({
+      where: {
+        word: {
+          guildId: guildId, // 👈 これで他のサーバーの身内ネタに反応しなくなります！
+        },
+      },
       include: {
         word: {
           include: { titles: true },
