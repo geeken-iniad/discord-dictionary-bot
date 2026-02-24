@@ -53,6 +53,10 @@ export const requestCommand = async (
       return;
     }
 
+    // 👇 【追加】リクエスト元のサーバー情報を取得する！
+    const guildName = interaction.guild?.name || "DM・不明なサーバー";
+    const guildIdStr = interaction.guildId || "不明";
+
     // 1. 運営チャンネルに通知カードを送る
     const adminEmbed = new EmbedBuilder()
       .setColor(Colors.Purple)
@@ -63,6 +67,12 @@ export const requestCommand = async (
           name: "リクエスト者",
           value: `${interaction.user.username}`,
           inline: true,
+        },
+        // 👇 【追加】運営に「どのサーバーから来たか」を教える！
+        { 
+          name: "送信元サーバー", 
+          value: `${guildName}\n(ID: ${guildIdStr})`, 
+          inline: false 
         },
         { name: "コメント", value: comment, inline: false },
       )
