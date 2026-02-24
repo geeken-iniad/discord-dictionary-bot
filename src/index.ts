@@ -105,8 +105,4 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
   }
 });
 
-client.on(Events.MessageCreate, async (message) => {
-  await handleMessage(message);
-});
-
 client.login(process.env.DISCORD_TOKEN);
