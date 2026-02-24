@@ -8,17 +8,17 @@ import {
   EmbedBuilder,
   SlashCommandBuilder,
 } from "discord.js";
-import * as Levenshtein from "fast-levenshtein"; // 👈 importの書き方を安全にしました
+import * as Levenshtein from "fast-levenshtein";
 import { prisma } from "../prismaClient";
 const { get } = Levenshtein;
 
 export const data = new SlashCommandBuilder()
-  .setName("keyword") // ※コマンド名はsearchではなくkeywordオプションを使う
+  .setName("keyword")
   .setName("search")
   .setDescription("単語を検索します")
   .addStringOption((option) =>
     option
-      .setName("keyword") // searchだけは 'keyword' のままでOK
+      .setName("keyword")
       .setDescription("検索したい文字")
       .setRequired(true),
   );
@@ -41,9 +41,17 @@ export const searchCommand = async (
     const keyword = interaction.options.getString("keyword");
     if (!keyword) return;
 
+    // 👇 【追加】今いるサーバーのIDを取得！
+    const guildId = interaction.guildId || "global";
+
     // 1. 全てのタイトルを取得する
-    // (ここで全部取ってきて、JS側で検索したほうが柔軟な検索ができます)
+    // 👇 【修正】「このサーバーの単語のタイトル」だけを取得するように where を追加！
     const allTitles = await prisma.title.findMany({
+      where: {
+        word: {
+          guildId: guildId, // 👈 これが超重要！親(Word)のguildIdで絞り込みます
+        },
+      },
       include: { word: true },
     });
 
