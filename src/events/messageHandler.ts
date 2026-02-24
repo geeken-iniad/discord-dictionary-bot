@@ -20,8 +20,8 @@ export const handleMessage = async (message: Message) => {
   if (!message.guild) return;
 
   // 👇 ② 【チェック】DBを検索する前に、今おやすみ中か確認する
-  const guildId = message.guildId!; // 👈 最後に「!」をつけるだけ！
-  const lastReplyTime = replyCooldowns.get(guildId) || 0;
+  const channelId = message.channelId; // 👈 ここを channelId に変更！
+  const lastReplyTime = replyCooldowns.get(channelId) || 0; // 👈 ここも！
   const now = Date.now();
 
   if (now - lastReplyTime < COOLDOWN_TIME) {
@@ -91,8 +91,8 @@ export const handleMessage = async (message: Message) => {
       });
       
       // 👇 ④-A スレッド内での返信成功後、タイマーをスタート！
-      replyCooldowns.set(guildId, Date.now());
-      console.log(`⏱️ サーバー(${guildId})で解説しました。1時間ストップします。`);
+      replyCooldowns.set(channelId, Date.now());
+      console.log(`⏱️ サーバー(${channelId})で解説しました。1時間ストップします。`);
       return;
     }
 
@@ -119,7 +119,7 @@ export const handleMessage = async (message: Message) => {
         });
         
         // 👇 ④-B エラーからの通常返信成功後もタイマーをスタート！
-        replyCooldowns.set(guildId, Date.now());
+        replyCooldowns.set(channelId, Date.now());
         return;
       }
     }
@@ -133,8 +133,8 @@ export const handleMessage = async (message: Message) => {
     });
 
     // 👇 ④-C スレッド新規作成＆送信成功後、タイマーをスタート！
-    replyCooldowns.set(guildId, Date.now());
-    console.log(`⏱️ サーバー(${guildId})で解説しました。1時間ストップします。`);
+    replyCooldowns.set(channelId, Date.now());
+    console.log(`⏱️ サーバー(${channelId})で解説しました。1時間ストップします。`);
 
   } catch (error) {
     console.error("AutoResponse Error:", error);
