@@ -11,20 +11,21 @@ datasource db {
 
 model Word {
   id         Int      @id @default(autoincrement())
+  guildId    String   @default("global") // 👈 【追加】サーバーIDを保存する名札！（既存データエラー防止のため初期値付き）
   meaning    String
   authorName String?
   imageUrl   String?
   link       String?
   tag        String?
   createdAt  DateTime @default(now())
-  updatedAt  DateTime @default(now()) @updatedAt // 👈 これを追加してください！
+  updatedAt  DateTime @default(now()) @updatedAt
   
   titles     Title[]
 }
 
 model Title {
   id     Int    @id @default(autoincrement())
-  text   String @unique
+  text   String // 👈 【変更】@unique を削除しました！（別々のサーバーで同じ単語を登録できるようにするため）
   word   Word   @relation(fields: [wordId], references: [id], onDelete: Cascade)
   wordId Int
 }
