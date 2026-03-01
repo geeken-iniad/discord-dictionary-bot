@@ -13,8 +13,7 @@ import { prisma } from "../prismaClient";
 const { get } = Levenshtein;
 
 export const data = new SlashCommandBuilder()
-  .setName("keyword")
-  .setName("search")
+  .setName("search") // 👈 名前は1つだけにする！
   .setDescription("単語を検索します")
   .addStringOption((option) =>
     option
