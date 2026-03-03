@@ -151,3 +151,5 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
 client.login(process.env.DISCORD_TOKEN);
 
 //自動で入力してほしい
+
+//supabaseに移す
