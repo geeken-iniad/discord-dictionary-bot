@@ -3,7 +3,7 @@ import { prisma } from "../prismaClient";
 
 // ⏱️ タイマー用のメモ帳
 const replyCooldowns = new Map<string, number>();
-const COOLDOWN_TIME = 60 * 60 * 1000; // 1時間
+const COOLDOWN_TIME = 24 * 60 * 60 * 1000; // 24時間
 
 // 正規化関数
 function normalize(str: string): string {
@@ -70,11 +70,11 @@ export const handleMessage = async (message: Message) => {
     const now = Date.now();
     const channelId = message.channelId;
 
-    // ヒットした単語の中から、「まだ1時間経っていない単語」を除外する
+    // ヒットした単語の中から、「まだ24時間経っていない単語」を除外する
     hits = hits.filter((word) => {
       const key = `${channelId}_${word.id}`; // カギを「チャンネルID_単語ID」にする
       const lastReplyTime = replyCooldowns.get(key) || 0;
-      return now - lastReplyTime >= COOLDOWN_TIME; // 1時間経っているものだけ残す
+      return now - lastReplyTime >= COOLDOWN_TIME; // 24時間経っているものだけ残す
     });
 
     // もし全部の単語がクールダウン中だったら、ここで処理終了！
@@ -106,7 +106,7 @@ export const handleMessage = async (message: Message) => {
         const key = `${channelId}_${word.id}`;
         replyCooldowns.set(key, Date.now());
       });
-      console.log(`⏱️ チャンネル(${channelId})で ${hits.length}個の単語を解説。これらは1時間休止します。`);
+      console.log(`⏱️ チャンネル(${channelId})で ${hits.length}個の単語を解説。これらは24時間休止します。`);
     };
 
     // 5. 送信処理

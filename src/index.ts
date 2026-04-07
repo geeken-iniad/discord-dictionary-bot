@@ -9,13 +9,16 @@ import {
 } from "discord.js";
 import dotenv from "dotenv";
 import { prisma } from "./prismaClient";
+import {
+  findDuplicateTitle,
+  getExistingTitleSet,
+  normalizeTitle,
+} from "./utils/wordRegistration";
 
 import * as commands from "./commands";
 import { handleMessage } from "./events/messageHandler";
 
 dotenv.config();
-const replyCooldowns = new Map<string, number>();
-const COOLDOWN_TIME = 60 * 60 * 1000;
 
 const client = new Client({
   intents: [
@@ -120,6 +123,17 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
           .map((t) => t.trim())
           .filter((t) => t.length > 0);
 
+        const existingTitles = await getExistingTitleSet(guildId);
+        const duplicateTitle = findDuplicateTitle(titles, existingTitles);
+
+        if (duplicateTitle) {
+          await interaction.reply({
+            content: `❌ **「${duplicateTitle}」** は既にこのサーバーに登録されています。`,
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
         // データベースに保存！
         await prisma.word.create({
           data: {
@@ -131,6 +145,8 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
             },
           },
         });
+
+        titles.forEach((title) => existingTitles.add(normalizeTitle(title)));
 
         const joinedTitle = titles.join(" / ");
         await interaction.reply({

@@ -11,6 +11,11 @@ import {
   TextInputStyle,
 } from "discord.js";
 import { prisma } from "../prismaClient";
+import {
+  findDuplicateTitle,
+  getExistingTitleSet,
+  normalizeTitle,
+} from "../utils/wordRegistration";
 
 export const addFromMeaningData = new ContextMenuCommandBuilder()
   .setName("📖 意味を引用して登録")
@@ -75,6 +80,16 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
         .map((t) => t.trim())
         .filter((t) => t.length > 0);
 
+      const existingTitles = await getExistingTitleSet(guildId);
+      const duplicateTitle = findDuplicateTitle(titles, existingTitles);
+
+      if (duplicateTitle) {
+        await interaction.editReply(
+          `❌ **「${duplicateTitle}」** は既にこのサーバーに登録されています。`,
+        );
+        return;
+      }
+
       await prisma.word.create({
         data: {
           guildId: guildId, // 👈 【追加】サーバー名札をつける！
@@ -114,6 +129,7 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
 
     let successCount = 0;
     const failedWords: string[] = [];
+    const existingTitles = await getExistingTitleSet(guildId);
 
     for (const entry of validEntries) {
       const [titlePart, meaningPart] = entry.split("=").map((s) => s.trim());
@@ -127,6 +143,13 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
         .split("/")
         .map((t) => t.trim())
         .filter((t) => t.length > 0);
+
+      const duplicateTitle = findDuplicateTitle(titles, existingTitles);
+
+      if (duplicateTitle) {
+        failedWords.push(`${titlePart} (既に登録済み: ${duplicateTitle})`);
+        continue;
+      }
 
       try {
         await prisma.word.create({
@@ -142,6 +165,7 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
             },
           },
         });
+        titles.forEach((title) => existingTitles.add(normalizeTitle(title)));
         successCount++;
       } catch (error) {
         failedWords.push(titlePart);
