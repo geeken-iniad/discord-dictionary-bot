@@ -7,7 +7,7 @@ import { prisma } from "../prismaClient";
 
 export const data = new SlashCommandBuilder()
   .setName("escape")
-  .setDescription("このスレッドでBotの自動反応を無効にします");
+  .setDescription("このスレッドでBotの自動反応を切り替えます");
 
 export const escapeCommand = async (
   interaction: ChatInputCommandInteraction,
@@ -24,14 +24,24 @@ export const escapeCommand = async (
     const guildId = interaction.guildId || "global";
     const threadId = interaction.channelId;
 
-    await prisma.escapedThread.upsert({
-      where: {
-        threadId,
-      },
-      update: {
-        guildId,
-      },
-      create: {
+    const escapedThread = await prisma.escapedThread.findUnique({
+      where: { threadId },
+    });
+
+    if (escapedThread) {
+      await prisma.escapedThread.delete({
+        where: { threadId },
+      });
+
+      await interaction.reply({
+        content: "✅ このスレッドのBot自動反応を再度有効にしました。",
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    await prisma.escapedThread.create({
+      data: {
         guildId,
         threadId,
       },
