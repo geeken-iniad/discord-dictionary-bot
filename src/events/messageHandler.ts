@@ -1,4 +1,4 @@
-import { ChannelType, Colors, EmbedBuilder, Message } from "discord.js";
+import { Colors, EmbedBuilder, Message } from "discord.js";
 import { prisma } from "../prismaClient";
 
 // ⏱️ タイマー用のメモ帳
@@ -23,6 +23,16 @@ export const handleMessage = async (message: Message) => {
   if (!message.guild) return;
 
   try {
+    if (message.channel.isThread()) {
+      const escapedThread = await prisma.escapedThread.findUnique({
+        where: {
+          threadId: message.channelId,
+        },
+      });
+
+      if (escapedThread) return;
+    }
+
     // 1. URL除去 & 正規化
     const contentWithoutUrl = message.content.replace(/https?:\/\/[^\s]+/g, "");
     if (!contentWithoutUrl.trim()) return;
@@ -110,20 +120,6 @@ export const handleMessage = async (message: Message) => {
     };
 
     // 5. 送信処理
-
-    // ▼ 既にスレッドの中なら、返信(reply)
-    if (
-      message.channel.type === ChannelType.PublicThread ||
-      message.channel.type === ChannelType.PrivateThread
-    ) {
-      await message.reply({
-        embeds: embeds,
-        allowedMentions: { repliedUser: false, parse: [] },
-      });
-      
-      setCooldowns(); // 送信成功後にタイマーセット！
-      return;
-    }
 
     // ▼ 通常チャンネルなら、スレッドを作ってそこに投稿する
     let thread = message.thread;

@@ -29,3 +29,10 @@ model Title {
   word   Word   @relation(fields: [wordId], references: [id], onDelete: Cascade)
   wordId Int
 }
+
+model EscapedThread {
+  id        Int      @id @default(autoincrement())
+  guildId   String
+  threadId  String   @unique
+  createdAt DateTime @default(now())
+}

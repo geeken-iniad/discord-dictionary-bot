@@ -37,6 +37,7 @@ client.once(Events.ClientReady, (c) => {
 
 const commandMap: { [key: string]: (interaction: any) => Promise<void> } = {
   add: commands.addCommand,
+  escape: commands.escapeCommand,
   list: commands.listCommand,
   delete: commands.deleteCommand,
   update: commands.updateCommand,

@@ -8,6 +8,7 @@ import {
   addFromWordData,
 } from "./commands/add";
 import { data as deleteData } from "./commands/delete";
+import { data as escapeData } from "./commands/escape";
 import { data as introData } from "./commands/introduction";
 import { data as listData } from "./commands/list";
 import { data as requestData } from "./commands/request";
@@ -22,6 +23,7 @@ const commands = [
   addData.toJSON(),
   addFromMeaningData.toJSON(),
   addFromWordData.toJSON(),
+  escapeData.toJSON(),
   deleteData.toJSON(),
   searchData.toJSON(),
   introData.toJSON(),
