@@ -18,7 +18,7 @@ export const introductionCommand = async (
     .setColor(Colors.Green)
     .setTitle("🔰 WordGuideBot の使い方 (最新版)")
     .setDescription(
-      "このサーバー専用の用語辞典を作れるBotです！\nチャット中に登録された単語が出ると、スレッドを作って自動で解説してくれます。\n*(※連投防止のため、同じ単語の解説は1チャンネルにつき24時間に1回までです)*",
+      "このサーバー専用の用語辞典を作れるBotです！\nチャット中に登録された単語が出ると、スレッドを作って自動で解説してくれます。\n*(※同じ単語の自動解説は1チャンネルにつき24時間に1回までです / `/escape` を使ったスレッドは自動反応しません)*",
     )
     .addFields(
       {
@@ -33,7 +33,8 @@ export const introductionCommand = async (
         value:
           `・**基本:** \`/add word:単語 meaning:意味\`\n` +
           `・**詳細:** \`tag\`(タグ) や \`link\`(リンク)、\`image\`(画像) も設定可能！\n` +
-          `・**一括:** \`word\` に \`A=意味 | B=意味\` と書くと複数まとめて登録できます！`,
+          `・**一括:** \`word\` に \`A=意味 | B=意味\` と書くと複数まとめて登録できます！\n` +
+          `・**重複防止:** 同じサーバー内で既に登録済みの単語は追加できません。`,
       },
       {
         name: "🔍 調べる・見る: `/search` & `/list`",
@@ -51,11 +52,12 @@ export const introductionCommand = async (
         name: "🗑️ その他・管理コマンド",
         value:
           `**/delete** : 登録した単語や別名を削除します。\n` +
+          `**/escape** : そのスレッドでの自動反応を切り替えます。もう一度実行すると解除されます。\n` +
           `**/request** : 辞書にない単語を運営チームにリクエストします。\n` +
           `**/quiz** : 登録された単語からクイズを出題して遊びます。`,
       },
     )
-    .setFooter({ text: "💡 英語の短い単語は独立している時のみ反応します / URLだけの投稿には反応しません" });
+    .setFooter({ text: "💡 英語の短い単語は独立している時のみ反応します / URLだけの投稿には反応しません / スレッド内の反応制御は /escape で切り替えできます" });
 
   await interaction.editReply({ embeds: [embed] });
 };
