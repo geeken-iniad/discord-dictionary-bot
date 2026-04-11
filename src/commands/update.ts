@@ -12,6 +12,10 @@ import {
   TextInputStyle,
 } from "discord.js";
 import { prisma } from "../prismaClient";
+import {
+  hasDisallowedMention,
+  MENTION_BLOCK_MESSAGE,
+} from "../utils/mentionGuard";
 
 // コマンド定義
 export const data = new SlashCommandBuilder()
@@ -135,6 +139,14 @@ async function handleWordUpdate(interaction: ChatInputCommandInteraction) {
     const newLink = submitted.fields.getTextInputValue("linkInput") || null;
     const newTag = submitted.fields.getTextInputValue("tagInput") || null;
     const newAliasRaw = submitted.fields.getTextInputValue("aliasInput");
+
+    if (hasDisallowedMention(newMeaning)) {
+      await submitted.reply({
+        content: MENTION_BLOCK_MESSAGE,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
 
     await prisma.word.update({
       where: { id: word.id },

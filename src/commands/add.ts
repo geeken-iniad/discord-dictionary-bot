@@ -16,6 +16,10 @@ import {
   getExistingTitleSet,
   normalizeTitle,
 } from "../utils/wordRegistration";
+import {
+  hasDisallowedMention,
+  MENTION_BLOCK_MESSAGE,
+} from "../utils/mentionGuard";
 
 export const addFromMeaningData = new ContextMenuCommandBuilder()
   .setName("📖 意味を引用して登録")
@@ -75,6 +79,11 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
     // パターンA: 通常モード (意味が入力されている場合)
     // ---------------------------------------------------
     if (inputMeaning) {
+      if (hasDisallowedMention(inputMeaning)) {
+        await interaction.editReply(MENTION_BLOCK_MESSAGE);
+        return;
+      }
+
       const titles = inputWord
         .split("/")
         .map((t) => t.trim())
@@ -136,6 +145,11 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
 
       if (!titlePart || !meaningPart) {
         failedWords.push(entry);
+        continue;
+      }
+
+      if (hasDisallowedMention(meaningPart)) {
+        failedWords.push(`${titlePart} (意味にメンションを含むため登録不可)`);
         continue;
       }
 

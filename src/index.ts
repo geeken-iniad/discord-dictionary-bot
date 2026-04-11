@@ -14,6 +14,10 @@ import {
   getExistingTitleSet,
   normalizeTitle,
 } from "./utils/wordRegistration";
+import {
+  hasDisallowedMention,
+  MENTION_BLOCK_MESSAGE,
+} from "./utils/mentionGuard";
 
 import * as commands from "./commands";
 import { handleMessage } from "./events/messageHandler";
@@ -114,6 +118,14 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
         // フォームに入力された値を受け取る
         const inputWord = interaction.fields.getTextInputValue("wordInput");
         const inputMeaning = interaction.fields.getTextInputValue("meaningInput");
+
+        if (hasDisallowedMention(inputMeaning)) {
+          await interaction.reply({
+            content: MENTION_BLOCK_MESSAGE,
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
         
         // 🌟 ここが最重要！今いるサーバーの名札をつける
         const guildId = interaction.guildId || "global";
