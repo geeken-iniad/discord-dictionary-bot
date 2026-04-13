@@ -120,12 +120,19 @@ export const handleMessage = async (message: Message) => {
       // Embed作成用に、Wiki辞書のマッチを見つける
       const wikiMatches = await findWikiMatches(normalizedContent, allWikiWords);
 
-      if (wikiMatches.length === 0) {
+      // Wiki辞書も24時間クールダウン対象にする
+      const availableWikiMatches = wikiMatches.filter((wikiWord) => {
+        const key = `${channelId}_wiki_${normalize(wikiWord.term)}`;
+        const lastReplyTime = replyCooldowns.get(key) || 0;
+        return now - lastReplyTime >= COOLDOWN_TIME;
+      });
+
+      if (availableWikiMatches.length === 0) {
         return; // カスタム＆Wiki辞書ともヒットなし
       }
 
       // Wiki辞書がヒットした場合のEmbed作成
-      const wikiEmbeds = wikiMatches.map((wikiWord) => {
+      const wikiEmbeds = availableWikiMatches.map((wikiWord) => {
         const embed = new EmbedBuilder()
           .setColor(Colors.Blue)
           .setTitle(`📚 説明: ${wikiWord.term}`)
@@ -138,12 +145,12 @@ export const handleMessage = async (message: Message) => {
 
       // Wiki辞書用のクールダウン管理（カスタム辞書と同じ仕組みを流用）
       const setCooldownsForWiki = () => {
-        wikiMatches.forEach((wikiWord) => {
-          const key = `${channelId}_wiki_${wikiWord.term}`;
+        availableWikiMatches.forEach((wikiWord) => {
+          const key = `${channelId}_wiki_${normalize(wikiWord.term)}`;
           replyCooldowns.set(key, Date.now());
         });
         console.log(
-          `⏱️ チャンネル(${channelId})でWiki辞書の ${wikiMatches.length}個を解説。これらは24時間休止します。`,
+          `⏱️ チャンネル(${channelId})でWiki辞書の ${availableWikiMatches.length}個を解説。これらは24時間休止します。`,
         );
       };
 
@@ -152,7 +159,7 @@ export const handleMessage = async (message: Message) => {
       if (!wikiThread) {
         try {
           wikiThread = await message.startThread({
-            name: `解説: ${wikiMatches[0]?.term || "用語"}（Wiki）`,
+            name: `解説: ${availableWikiMatches[0]?.term || "用語"}（Wiki）`,
             autoArchiveDuration: 60,
             reason: "Wikipedia用語解説のため",
           });

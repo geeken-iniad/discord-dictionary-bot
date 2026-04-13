@@ -5,6 +5,11 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// 末尾のカテゴリ補足（例: "(プログラミング言語)"）を削除して検索ヒットしやすくする
+function normalizeTerm(title: string): string {
+  return title.replace(/\s*\(プログラミング言語\)$/u, "").trim();
+}
+
 // Wikipedia API からカテゴリ内のページを取得
 async function getPageNamesFromCategory(
   categoryName: string,
@@ -91,7 +96,7 @@ async function main() {
   try {
     console.log("🚀 Wikipedia IT用語辞書取得スクリプトを開始します...");
 
-    const categoryName = "Category:情報技術";
+    const categoryName = "Category:プログラミング言語";
     let continueToken: string | undefined;
     let totalProcessed = 0;
     let totalSaved = 0;
@@ -112,6 +117,13 @@ async function main() {
       // 各ページの概要を取得
       for (const title of titles) {
         totalProcessed++;
+        const normalizedTerm = normalizeTerm(title);
+
+        if (!normalizedTerm) {
+          console.log(`⏭️  スキップ: ${title} (正規化後タイトルが空)`);
+          await sleep(1000);
+          continue;
+        }
 
         const summary = await getPageSummary(title);
         if (!summary) {
@@ -122,20 +134,20 @@ async function main() {
 
         // 既存データを更新、または新規作成（upsert）
         await prisma.wikiWord.upsert({
-          where: { term: title },
+          where: { term: normalizedTerm },
           update: {
             meaning: summary.summary,
             link: summary.url,
           },
           create: {
-            term: title,
+            term: normalizedTerm,
             meaning: summary.summary,
             link: summary.url,
           },
         });
 
         totalSaved++;
-        console.log(`💾 保存: ${title}`);
+        console.log(`💾 保存: ${normalizedTerm}`);
 
         // API制限に引っかからないよう1秒スリープ
         await sleep(1000);
