@@ -40,6 +40,36 @@ export const data = new SlashCommandBuilder()
       .setRequired(true),
   );
 
+async function replyErrorPrivate(
+  interaction: ChatInputCommandInteraction,
+  message: string,
+) {
+  try {
+    // deferReply() 後の公開プレースホルダーを消して、本人だけにエラーを返す
+    if (interaction.deferred && !interaction.replied) {
+      await interaction.deleteReply().catch(() => undefined);
+    }
+
+    await interaction.followUp({
+      content: message,
+      flags: MessageFlags.Ephemeral,
+    });
+  } catch {
+    if (interaction.replied || interaction.deferred) {
+      await interaction.followUp({
+        content: message,
+        flags: MessageFlags.Ephemeral,
+      });
+      return;
+    }
+
+    await interaction.reply({
+      content: message,
+      flags: MessageFlags.Ephemeral,
+    });
+  }
+}
+
 export const addWikiCommand = async (
   interaction: ChatInputCommandInteraction,
 ) => {
@@ -54,9 +84,7 @@ export const addWikiCommand = async (
     const normalizedWord = normalizeTitle(word);
 
     if (existingTitles.has(normalizedWord)) {
-      await interaction.editReply(
-        `❌ 既にこの単語は登録されています`,
-      );
+      await replyErrorPrivate(interaction, "❌ 既にこの単語は登録されています");
       return;
     }
 
@@ -68,7 +96,8 @@ export const addWikiCommand = async (
     const response = await fetch(wikiUrl);
 
     if (!response.ok) {
-      await interaction.editReply(
+      await replyErrorPrivate(
+        interaction,
         `❌ Wikipediaで『${word}』が見つかりませんでした`,
       );
       return;
@@ -83,7 +112,8 @@ export const addWikiCommand = async (
 
     // 曖昧さ回避ページチェック
     if (wikiData.type === "disambiguation") {
-      await interaction.editReply(
+      await replyErrorPrivate(
+        interaction,
         `❌ Wikipediaで『${word}』が見つかりませんでした`,
       );
       return;
@@ -92,7 +122,8 @@ export const addWikiCommand = async (
     // 概要テキストを取得
     const extract = wikiData.extract || "";
     if (!extract) {
-      await interaction.editReply(
+      await replyErrorPrivate(
+        interaction,
         `❌ Wikipediaで『${word}』が見つかりませんでした`,
       );
       return;
@@ -100,9 +131,7 @@ export const addWikiCommand = async (
 
     // メンション検出（念のため）
     if (hasDisallowedMention(extract)) {
-      await interaction.editReply(
-        `❌ 取得した概要文に不正な内容が含まれています。`,
-      );
+      await replyErrorPrivate(interaction, MENTION_BLOCK_MESSAGE);
       return;
     }
 
@@ -171,17 +200,6 @@ export const addWikiCommand = async (
   } catch (error) {
     console.error("AddWiki Command Error:", error);
 
-    if (interaction.replied || interaction.deferred) {
-      await interaction.followUp({
-        content: "❌ エラーが発生しました。",
-        flags: MessageFlags.Ephemeral,
-      });
-      return;
-    }
-
-    await interaction.reply({
-      content: "❌ エラーが発生しました。",
-      flags: MessageFlags.Ephemeral,
-    });
+    await replyErrorPrivate(interaction, "❌ エラーが発生しました。");
   }
 };
