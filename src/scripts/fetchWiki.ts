@@ -5,9 +5,12 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// 末尾のカテゴリ補足（例: "(プログラミング言語)"）を削除して検索ヒットしやすくする
+// 末尾のカテゴリ補足を削除して検索ヒットしやすくする
 function normalizeTerm(title: string): string {
-  return title.replace(/\s*\(プログラミング言語\)$/u, "").trim();
+  return title
+    .replace(/\s*\(プログラミング言語\)$/u, "")
+    .replace(/\s*\(オペレーティングシステム\)$/u, "")
+    .trim();
 }
 
 // Wikipedia API からカテゴリ内のページを取得
@@ -96,7 +99,7 @@ async function main() {
   try {
     console.log("🚀 Wikipedia IT用語辞書取得スクリプトを開始します...");
 
-    const categoryName = "Category:プログラミング言語";
+    const categoryName = "Category:オペレーティングシステム";
     let continueToken: string | undefined;
     let totalProcessed = 0;
     let totalSaved = 0;
