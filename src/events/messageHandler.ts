@@ -18,6 +18,28 @@ function escapeRegExp(str: string) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+// Wiki辞書から単語を検索する関数
+async function findWikiMatches(
+  normalizedContent: string,
+  allWikiWords: { term: string; meaning: string; link: string }[],
+): Promise<typeof allWikiWords> {
+  const matches: typeof allWikiWords = [];
+
+  for (const wikiWord of allWikiWords) {
+    const targetWord = normalize(wikiWord.term);
+    const escapedWord = escapeRegExp(targetWord);
+    const regex = new RegExp(
+      `(?<![a-z0-9_])${escapedWord}(?![a-z0-9_])`,
+    );
+
+    if (regex.test(normalizedContent)) {
+      matches.push(wikiWord);
+    }
+  }
+
+  return matches;
+}
+
 export const handleMessage = async (message: Message) => {
   if (message.author.bot) return;
   if (!message.guild) return;
@@ -67,7 +89,6 @@ export const handleMessage = async (message: Message) => {
 
       return regex.test(normalizedContent);
     });
-    if (hitTitles.length === 0) return;
 
     // 重複除去して「ヒットしたWord」の配列(hits)を作る
     const uniqueWords = new Map();
@@ -87,8 +108,75 @@ export const handleMessage = async (message: Message) => {
       return now - lastReplyTime >= COOLDOWN_TIME; // 24時間経っているものだけ残す
     });
 
-    // もし全部の単語がクールダウン中だったら、ここで処理終了！
-    if (hits.length === 0) return;
+    // もし全部の単語がクールダウン中だったら、ここで優先度2へ！
+    if (hits.length === 0) {
+      // ============================================
+      // 👇 優先度2: Wiki辞書を検索する
+      // ============================================
+
+      // Wiki辞書から全単語を取得
+      const allWikiWords = await prisma.wikiWord.findMany();
+
+      // Embed作成用に、Wiki辞書のマッチを見つける
+      const wikiMatches = await findWikiMatches(normalizedContent, allWikiWords);
+
+      if (wikiMatches.length === 0) {
+        return; // カスタム＆Wiki辞書ともヒットなし
+      }
+
+      // Wiki辞書がヒットした場合のEmbed作成
+      const wikiEmbeds = wikiMatches.map((wikiWord) => {
+        const embed = new EmbedBuilder()
+          .setColor(Colors.Blue)
+          .setTitle(`📚 説明: ${wikiWord.term}`)
+          .setDescription(wikiWord.meaning)
+          .setFooter({ text: "📚 Wikipediaより引用 (自動補完)" })
+          .setURL(wikiWord.link);
+
+        return embed;
+      });
+
+      // Wiki辞書用のクールダウン管理（カスタム辞書と同じ仕組みを流用）
+      const setCooldownsForWiki = () => {
+        wikiMatches.forEach((wikiWord) => {
+          const key = `${channelId}_wiki_${wikiWord.term}`;
+          replyCooldowns.set(key, Date.now());
+        });
+        console.log(
+          `⏱️ チャンネル(${channelId})でWiki辞書の ${wikiMatches.length}個を解説。これらは24時間休止します。`,
+        );
+      };
+
+      // Wiki辞書メッセージ送信
+      let wikiThread = message.thread;
+      if (!wikiThread) {
+        try {
+          wikiThread = await message.startThread({
+            name: `解説: ${wikiMatches[0]?.term || "用語"}（Wiki）`,
+            autoArchiveDuration: 60,
+            reason: "Wikipedia用語解説のため",
+          });
+        } catch (e) {
+          console.error(e);
+          await message.reply({
+            embeds: wikiEmbeds,
+            allowedMentions: { repliedUser: false, parse: [] },
+          });
+
+          setCooldownsForWiki();
+          return;
+        }
+      }
+
+      await wikiThread.send({
+        content: "用語が見つかりました！(Wikipedia)",
+        embeds: wikiEmbeds,
+        allowedMentions: { parse: [] },
+      });
+
+      setCooldownsForWiki();
+      return;
+    }
     // ==========================================
 
     // 4. 解説Embedを作成 (生き残った単語だけで作る)

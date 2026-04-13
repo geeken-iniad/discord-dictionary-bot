@@ -8,6 +8,7 @@
     "register": "ts-node src/deploy-commands.ts",
     "build": "tsc",
     "start": "npx prisma db push && node dist/deploy-commands.js && node dist/index.js",
+    "fetch-wiki": "ts-node src/scripts/fetchWiki.ts",
     "postinstall": "prisma generate"
   },
   "repository": {

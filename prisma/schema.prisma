@@ -36,3 +36,11 @@ model EscapedThread {
   threadId  String   @unique
   createdAt DateTime @default(now())
 }
+
+model WikiWord {
+  id        Int      @id @default(autoincrement())
+  term      String   @unique
+  meaning   String
+  link      String
+  updatedAt DateTime @updatedAt
+}
