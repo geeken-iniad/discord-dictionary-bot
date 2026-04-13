@@ -7,6 +7,7 @@ import {
   addFromMeaningData,
   addFromWordData,
 } from "./commands/add";
+import { data as addWikiData } from "./commands/add_wiki";
 import { data as deleteData } from "./commands/delete";
 import { data as escapeData } from "./commands/escape";
 import { data as introData } from "./commands/introduction";
@@ -23,6 +24,7 @@ const commands = [
   addData.toJSON(),
   addFromMeaningData.toJSON(),
   addFromWordData.toJSON(),
+  addWikiData.toJSON(),
   escapeData.toJSON(),
   deleteData.toJSON(),
   searchData.toJSON(),

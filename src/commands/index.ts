@@ -1,5 +1,6 @@
 // コマンドの「実行関数」だけを名指しでエクスポートする
 export { addCommand, contextAddCommand } from "./add";
+export { addWikiCommand } from "./add_wiki";
 export { escapeCommand } from "./escape";
 export { deleteCommand } from "./delete";
 export { introductionCommand } from "./introduction";
