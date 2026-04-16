@@ -18,6 +18,15 @@ function escapeRegExp(str: string) {
   return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function getTermCooldownKey(channelId: string, term: string): string {
+  return `${channelId}_term_${normalize(term)}`;
+}
+
+function isCooldownActive(key: string, now: number): boolean {
+  const lastReplyTime = replyCooldowns.get(key) || 0;
+  return now - lastReplyTime < COOLDOWN_TIME;
+}
+
 // Wiki辞書から単語を検索する関数
 async function findWikiMatches(
   normalizedContent: string,
@@ -103,9 +112,13 @@ export const handleMessage = async (message: Message) => {
 
     // ヒットした単語の中から、「まだ24時間経っていない単語」を除外する
     hits = hits.filter((word) => {
-      const key = `${channelId}_${word.id}`; // カギを「チャンネルID_単語ID」にする
-      const lastReplyTime = replyCooldowns.get(key) || 0;
-      return now - lastReplyTime >= COOLDOWN_TIME; // 24時間経っているものだけ残す
+      const titleTexts = (word.titles || []).map((t: { text: string }) => t.text);
+      const cooldownKeys = titleTexts.map((title: string) =>
+        getTermCooldownKey(channelId, title),
+      );
+
+      // 同じWordに紐づくタイトルのいずれかがクールダウン中なら除外
+      return cooldownKeys.every((key: string) => !isCooldownActive(key, now));
     });
 
     // もし全部の単語がクールダウン中だったら、ここで優先度2へ！
@@ -122,9 +135,8 @@ export const handleMessage = async (message: Message) => {
 
       // Wiki辞書も24時間クールダウン対象にする
       const availableWikiMatches = wikiMatches.filter((wikiWord) => {
-        const key = `${channelId}_wiki_${normalize(wikiWord.term)}`;
-        const lastReplyTime = replyCooldowns.get(key) || 0;
-        return now - lastReplyTime >= COOLDOWN_TIME;
+        const key = getTermCooldownKey(channelId, wikiWord.term);
+        return !isCooldownActive(key, now);
       });
 
       if (availableWikiMatches.length === 0) {
@@ -146,7 +158,7 @@ export const handleMessage = async (message: Message) => {
       // Wiki辞書用のクールダウン管理（カスタム辞書と同じ仕組みを流用）
       const setCooldownsForWiki = () => {
         availableWikiMatches.forEach((wikiWord) => {
-          const key = `${channelId}_wiki_${normalize(wikiWord.term)}`;
+          const key = getTermCooldownKey(channelId, wikiWord.term);
           replyCooldowns.set(key, Date.now());
         });
         console.log(
@@ -208,8 +220,10 @@ export const handleMessage = async (message: Message) => {
     // 👇 タイマーをセットする共通の関数
     const setCooldowns = () => {
       hits.forEach((word) => {
-        const key = `${channelId}_${word.id}`;
-        replyCooldowns.set(key, Date.now());
+        (word.titles || []).forEach((title: { text: string }) => {
+          const key = getTermCooldownKey(channelId, title.text);
+          replyCooldowns.set(key, Date.now());
+        });
       });
       console.log(`⏱️ チャンネル(${channelId})で ${hits.length}個の単語を解説。これらは24時間休止します。`);
     };
