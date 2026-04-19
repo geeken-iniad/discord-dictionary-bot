@@ -83,11 +83,25 @@ export const quizCommand = async (interaction: ChatInputCommandInteraction) => {
 
     await interaction.editReply({ embeds: [embed] });
 
-    // スレッド内対応: interaction.channel が null の場合はクライアントから取得
-    let channel = interaction.channel as TextChannel | ThreadChannel | null;
-    if (!channel && interaction.channelId) {
-      const fetchedChannel = await interaction.client.channels.fetch(interaction.channelId).catch(() => null);
-      channel = fetchedChannel as TextChannel | ThreadChannel | null;
+    // スレッド内対応: ギルドコンテキストからチャンネルを取得
+    let channel: TextChannel | ThreadChannel | null = interaction.channel as TextChannel | ThreadChannel | null;
+    
+    if (!channel) {
+      if (!interaction.guild || !interaction.channelId) {
+        await interaction.editReply("❌ ギルド・チャンネル情報が不足しています。");
+        releaseLock();
+        return;
+      }
+
+      try {
+        const fetchedChannel = await interaction.guild.channels.fetch(interaction.channelId);
+        // テキストベースチャンネル（TextChannel / ThreadChannel）か確認
+        if (fetchedChannel?.isTextBased() && (fetchedChannel.isDMBased() === false)) {
+          channel = fetchedChannel as TextChannel | ThreadChannel;
+        }
+      } catch (error) {
+        console.error("チャンネル取得失敗:", error);
+      }
     }
 
     if (!channel) {
