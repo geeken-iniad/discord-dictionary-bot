@@ -27,6 +27,29 @@ function isCooldownActive(key: string, now: number): boolean {
   return now - lastReplyTime < COOLDOWN_TIME;
 }
 
+function getWordCooldownKeys(
+  channelId: string,
+  word: { id: number; titles?: Array<{ text: string }> },
+  matchedTitles: Set<string>,
+): string[] {
+  const keys = new Set<string>();
+
+  (word.titles || []).forEach((title) => {
+    if (!title.text.trim()) return;
+    keys.add(getTermCooldownKey(channelId, title.text));
+  });
+
+  matchedTitles.forEach((title) => {
+    if (!title.trim()) return;
+    keys.add(getTermCooldownKey(channelId, title));
+  });
+
+  // データ不整合でタイトルが空でも、Word単位のクールダウンは必ず効かせる
+  keys.add(`${channelId}_word_${word.id}`);
+
+  return Array.from(keys);
+}
+
 // Wiki辞書から単語を検索する関数
 async function findWikiMatches(
   normalizedContent: string,
@@ -103,6 +126,12 @@ export const handleMessage = async (message: Message) => {
     const uniqueWords = new Map();
     hitTitles.forEach((t) => uniqueWords.set(t.wordId, t.word));
     let hits = Array.from(uniqueWords.values());
+    const matchedTitlesByWordId = new Map<number, Set<string>>();
+    hitTitles.forEach((t) => {
+      const current = matchedTitlesByWordId.get(t.wordId) || new Set<string>();
+      current.add(t.text);
+      matchedTitlesByWordId.set(t.wordId, current);
+    });
 
     // ==========================================
     // 👇 新しいストッパー（単語ごとの連投防止）
@@ -112,12 +141,13 @@ export const handleMessage = async (message: Message) => {
 
     // ヒットした単語の中から、「まだ24時間経っていない単語」を除外する
     hits = hits.filter((word) => {
-      const titleTexts = (word.titles || []).map((t: { text: string }) => t.text);
-      const cooldownKeys = titleTexts.map((title: string) =>
-        getTermCooldownKey(channelId, title),
+      const cooldownKeys = getWordCooldownKeys(
+        channelId,
+        word,
+        matchedTitlesByWordId.get(word.id) || new Set<string>(),
       );
 
-      // 同じWordに紐づくタイトルのいずれかがクールダウン中なら除外
+      // 同じWordに紐づくタイトルのいずれか、またはWord自体がクールダウン中なら除外
       return cooldownKeys.every((key: string) => !isCooldownActive(key, now));
     });
 
@@ -220,8 +250,12 @@ export const handleMessage = async (message: Message) => {
     // 👇 タイマーをセットする共通の関数
     const setCooldowns = () => {
       hits.forEach((word) => {
-        (word.titles || []).forEach((title: { text: string }) => {
-          const key = getTermCooldownKey(channelId, title.text);
+        const cooldownKeys = getWordCooldownKeys(
+          channelId,
+          word,
+          matchedTitlesByWordId.get(word.id) || new Set<string>(),
+        );
+        cooldownKeys.forEach((key) => {
           replyCooldowns.set(key, Date.now());
         });
       });

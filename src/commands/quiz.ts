@@ -5,8 +5,6 @@ import {
   Message,
   MessageFlags,
   SlashCommandBuilder,
-  TextChannel,
-  ThreadChannel,
 } from "discord.js";
 import { prisma } from "../prismaClient";
 
@@ -82,30 +80,17 @@ export const quizCommand = async (interaction: ChatInputCommandInteraction) => {
     if (word.imageUrl) embed.setImage(word.imageUrl);
 
     await interaction.editReply({ embeds: [embed] });
+    const quizMessage = await interaction.fetchReply();
 
-    // スレッド内対応: ギルドコンテキストからチャンネルを取得
-    let channel: TextChannel | ThreadChannel | null = interaction.channel as TextChannel | ThreadChannel | null;
-    
-    if (!channel) {
-      if (!interaction.guild || !interaction.channelId) {
-        await interaction.editReply("❌ ギルド・チャンネル情報が不足しています。");
-        releaseLock();
-        return;
-      }
-
-      try {
-        const fetchedChannel = await interaction.guild.channels.fetch(interaction.channelId);
-        // テキストベースチャンネル（TextChannel / ThreadChannel）か確認
-        if (fetchedChannel?.isTextBased() && (fetchedChannel.isDMBased() === false)) {
-          channel = fetchedChannel as TextChannel | ThreadChannel;
-        }
-      } catch (error) {
-        console.error("チャンネル取得失敗:", error);
-      }
+    const channel = quizMessage.channel;
+    if (!channel || !channel.isTextBased()) {
+      await interaction.editReply("❌ チャンネル情報を取得できません。");
+      releaseLock();
+      return;
     }
 
-    if (!channel) {
-      await interaction.editReply("❌ チャンネル情報を取得できません。");
+    if (!("createMessageCollector" in channel)) {
+      await interaction.editReply("❌ このチャンネルではクイズを実行できません。");
       releaseLock();
       return;
     }
@@ -153,7 +138,7 @@ export const quizCommand = async (interaction: ChatInputCommandInteraction) => {
       await m.react("❌").catch(() => undefined);
     });
 
-    collector.on("end", async (_collected) => {
+    collector.on("end", async () => {
       if (!solved) {
         const titleText = word.titles.map((t) => t.text).join(" / ");
         interaction.followUp(
