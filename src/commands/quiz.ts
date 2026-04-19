@@ -11,6 +11,15 @@ import { prisma } from "../prismaClient";
 
 const activeQuizGuilds = new Set<string>();
 
+function normalizeForQuizMatch(str: string): string {
+  return str
+    .replace(/[\u3041-\u3096]/g, (match) =>
+      String.fromCharCode(match.charCodeAt(0) + 0x60),
+    )
+    .toLowerCase()
+    .trim();
+}
+
 export const data = new SlashCommandBuilder()
   .setName("quiz")
   .setDescription("登録された単語からクイズを出します");
@@ -75,6 +84,9 @@ export const quizCommand = async (interaction: ChatInputCommandInteraction) => {
     const filter = (m: Message) => !m.author.bot;
     const channel = interaction.channel as TextChannel;
     let solved = false;
+    const normalizedTitles = new Set(
+      word.titles.map((t) => normalizeForQuizMatch(t.text)),
+    );
 
     const collector = channel.createMessageCollector({
       filter,
@@ -84,7 +96,8 @@ export const quizCommand = async (interaction: ChatInputCommandInteraction) => {
     collector.on("collect", async (m: Message) => {
       if (solved) return;
 
-      const isCorrect = word.titles.some((t) => t.text === m.content.trim());
+      const normalizedAnswer = normalizeForQuizMatch(m.content);
+      const isCorrect = normalizedTitles.has(normalizedAnswer);
       const titleText = word.titles.map((t) => t.text).join(" / ");
 
       if (isCorrect) {
