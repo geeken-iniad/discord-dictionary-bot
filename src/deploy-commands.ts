@@ -12,6 +12,7 @@ import { data as deleteData } from "./commands/delete";
 import { data as escapeData } from "./commands/escape";
 import { data as introData } from "./commands/introduction";
 import { data as listData } from "./commands/list";
+import { data as quizData } from "./commands/quiz";
 import { data as requestData } from "./commands/request";
 import { data as searchData } from "./commands/search";
 import { data as updateData } from "./commands/update";
@@ -25,6 +26,7 @@ const commands = [
   addFromMeaningData.toJSON(),
   addFromWordData.toJSON(),
   addWikiData.toJSON(),
+  quizData.toJSON(),
   escapeData.toJSON(),
   deleteData.toJSON(),
   searchData.toJSON(),

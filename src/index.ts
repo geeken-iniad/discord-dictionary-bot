@@ -10,14 +10,14 @@ import {
 import dotenv from "dotenv";
 import { prisma } from "./prismaClient";
 import {
+  hasDisallowedMention,
+  MENTION_BLOCK_MESSAGE,
+} from "./utils/mentionGuard";
+import {
   findDuplicateTitle,
   getExistingTitleSet,
   normalizeTitle,
 } from "./utils/wordRegistration";
-import {
-  hasDisallowedMention,
-  MENTION_BLOCK_MESSAGE,
-} from "./utils/mentionGuard";
 
 import * as commands from "./commands";
 import { handleMessage } from "./events/messageHandler";
@@ -35,7 +35,7 @@ const client = new Client({
 client.once(Events.ClientReady, (c) => {
   console.log(`準備OK！ ${c.user.tag} が起動しました。`);
   console.log(
-    `コマンド同期完了: /add, /add_wiki, /list, /delete, /update, /search, /introduction, /request が使えます`,
+    `コマンド同期完了: /add, /add_wiki, /quiz, /escape, /list, /delete, /update, /search, /introduction, /request が使えます`,
   );
 });
 
@@ -55,8 +55,6 @@ const commandMap: { [key: string]: (interaction: any) => Promise<void> } = {
 client.on(Events.MessageCreate, async (message) => {
   await handleMessage(message);
 });
-
-
 
 client.on(Events.InteractionCreate, async (interaction: Interaction) => {
   // 🅰️ スラッシュコマンド
@@ -112,13 +110,13 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
         }
       }
     }
-  }
-  else if (interaction.isModalSubmit()) {
+  } else if (interaction.isModalSubmit()) {
     if (interaction.customId === "addWordModal_Context") {
       try {
         // フォームに入力された値を受け取る
         const inputWord = interaction.fields.getTextInputValue("wordInput");
-        const inputMeaning = interaction.fields.getTextInputValue("meaningInput");
+        const inputMeaning =
+          interaction.fields.getTextInputValue("meaningInput");
 
         if (hasDisallowedMention(inputMeaning)) {
           await interaction.reply({
@@ -127,7 +125,7 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
           });
           return;
         }
-        
+
         // 🌟 ここが最重要！今いるサーバーの名札をつける
         const guildId = interaction.guildId || "global";
 
@@ -166,7 +164,6 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
         await interaction.reply({
           content: `✅ 右クリックから **「${joinedTitle}」** を登録しました！`,
         });
-
       } catch (error) {
         console.error(`Modal Submit Error`, error);
         await interaction.reply({
