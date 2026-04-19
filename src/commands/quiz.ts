@@ -7,6 +7,10 @@ import {
   SlashCommandBuilder,
 } from "discord.js";
 import { prisma } from "../prismaClient";
+import {
+  markQuizChannelActive,
+  unmarkQuizChannelActive,
+} from "../utils/quizState";
 
 const activeQuizGuilds = new Set<string>();
 
@@ -95,19 +99,9 @@ export const quizCommand = async (interaction: ChatInputCommandInteraction) => {
       return;
     }
 
-    // クイズ進行中のスレッドを escapedThread に登録（messageHandler が干渉しないようにするため）
-    let quizThreadId: string | null = null;
-    if (channel.isThread()) {
-      quizThreadId = channel.id;
-      await prisma.escapedThread.create({
-        data: {
-          guildId: guildId,
-          threadId: quizThreadId,
-        },
-      }).catch(() => {
-        // 既に登録済みの場合はスキップ
-      });
-    }
+    // クイズ中はこのチャンネルの自動応答を一時停止する
+    const quizChannelId = channel.id;
+    markQuizChannelActive(quizChannelId);
 
     const filter = (m: Message) => !m.author.bot;
     let solved = false;
@@ -146,19 +140,15 @@ export const quizCommand = async (interaction: ChatInputCommandInteraction) => {
         );
       }
 
-      // クイズスレッドを escapedThread から削除
-      if (quizThreadId) {
-        await prisma.escapedThread.delete({
-          where: { threadId: quizThreadId },
-        }).catch(() => {
-          // 削除済みの場合もスキップ
-        });
-      }
+      unmarkQuizChannelActive(quizChannelId);
 
       releaseLock();
     });
   } catch (error) {
     console.error(error);
+    if (interaction.channelId) {
+      unmarkQuizChannelActive(interaction.channelId);
+    }
     releaseLock();
 
     if (interaction.replied || interaction.deferred) {

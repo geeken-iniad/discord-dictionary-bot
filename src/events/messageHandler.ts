@@ -1,5 +1,6 @@
 import { Colors, EmbedBuilder, Message } from "discord.js";
 import { prisma } from "../prismaClient";
+import { isQuizChannelActive } from "../utils/quizState";
 
 // ⏱️ タイマー用のメモ帳
 const replyCooldowns = new Map<string, number>();
@@ -75,6 +76,7 @@ async function findWikiMatches(
 export const handleMessage = async (message: Message) => {
   if (message.author.bot) return;
   if (!message.guild) return;
+  if (isQuizChannelActive(message.channelId)) return;
 
   try {
     if (message.channel.isThread()) {
