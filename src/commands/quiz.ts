@@ -6,11 +6,13 @@ import {
   MessageFlags,
   SlashCommandBuilder,
   TextChannel,
+  ThreadChannel,
 } from "discord.js";
 import { prisma } from "../prismaClient";
 
 const activeQuizGuilds = new Set<string>();
 
+// messageHandler と同じ正規化ロジックを使用
 function normalizeForQuizMatch(str: string): string {
   return str
     .replace(/[\u3041-\u3096]/g, (match) =>
@@ -81,8 +83,29 @@ export const quizCommand = async (interaction: ChatInputCommandInteraction) => {
 
     await interaction.editReply({ embeds: [embed] });
 
+    // スレッド内対応: TextChannel または ThreadChannel を処理
+    const channel = interaction.channel as TextChannel | ThreadChannel;
+    if (!channel) {
+      await interaction.editReply("❌ チャンネル情報を取得できません。");
+      releaseLock();
+      return;
+    }
+
+    // クイズ進行中のスレッドを escapedThread に登録（messageHandler が干渉しないようにするため）
+    let quizThreadId: string | null = null;
+    if (channel.isThread()) {
+      quizThreadId = channel.id;
+      await prisma.escapedThread.create({
+        data: {
+          guildId: guildId,
+          threadId: quizThreadId,
+        },
+      }).catch(() => {
+        // 既に登録済みの場合はスキップ
+      });
+    }
+
     const filter = (m: Message) => !m.author.bot;
-    const channel = interaction.channel as TextChannel;
     let solved = false;
     const normalizedTitles = new Set(
       word.titles.map((t) => normalizeForQuizMatch(t.text)),
@@ -111,12 +134,21 @@ export const quizCommand = async (interaction: ChatInputCommandInteraction) => {
       await m.react("❌").catch(() => undefined);
     });
 
-    collector.on("end", (_collected) => {
+    collector.on("end", async (_collected) => {
       if (!solved) {
         const titleText = word.titles.map((t) => t.text).join(" / ");
         interaction.followUp(
           `⏰ **時間切れ！** 正解は **「${titleText}」** でした。`,
         );
+      }
+
+      // クイズスレッドを escapedThread から削除
+      if (quizThreadId) {
+        await prisma.escapedThread.delete({
+          where: { threadId: quizThreadId },
+        }).catch(() => {
+          // 削除済みの場合もスキップ
+        });
       }
 
       releaseLock();

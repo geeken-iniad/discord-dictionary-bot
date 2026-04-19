@@ -99,7 +99,7 @@ async function main() {
   try {
     console.log("🚀 Wikipedia IT用語辞書取得スクリプトを開始します...");
 
-    const categoryName = "Category:オペレーティングシステム";
+    const categoryName = "Category:ウェブサイト";
     let continueToken: string | undefined;
     let totalProcessed = 0;
     let totalSaved = 0;
