@@ -15,7 +15,6 @@ import {
   unmarkQuizGuildActive,
 } from "../utils/quizState";
 
-// messageHandler と同じ正規化ロジックを使用
 function normalizeForQuizMatch(str: string): string {
   return str
     .replace(/[\u3041-\u3096]/g, (match) =>
@@ -26,10 +25,12 @@ function normalizeForQuizMatch(str: string): string {
 }
 
 export const data = new SlashCommandBuilder()
-  .setName("quiz")
-  .setDescription("登録された単語からクイズを出します");
+  .setName("wiki-quiz")
+  .setDescription("Wikipedia辞書からクイズを出します");
 
-export const quizCommand = async (interaction: ChatInputCommandInteraction) => {
+export const wikiQuizCommand = async (
+  interaction: ChatInputCommandInteraction,
+) => {
   const guildId = interaction.guildId || "global";
 
   if (isQuizGuildActive(guildId)) {
@@ -53,36 +54,30 @@ export const quizCommand = async (interaction: ChatInputCommandInteraction) => {
   try {
     await interaction.deferReply();
 
-    const count = await prisma.word.count({
-      where: { guildId },
-    });
+    const count = await prisma.wikiWord.count();
     if (count === 0) {
-      await interaction.editReply("❌ まだ単語が登録されていません。");
+      await interaction.editReply("❌ まだWikipedia辞書に単語がありません。");
       releaseLock();
       return;
     }
 
     const randomIndex = Math.floor(Math.random() * count);
-    const [word] = await prisma.word.findMany({
-      where: { guildId },
+    const [wikiWord] = await prisma.wikiWord.findMany({
       take: 1,
       skip: randomIndex,
-      include: { titles: true },
     });
 
-    if (!word) {
+    if (!wikiWord) {
       await interaction.editReply("❌ 取得エラー。");
       releaseLock();
       return;
     }
 
     const embed = new EmbedBuilder()
-      .setColor(Colors.Gold)
-      .setTitle("🧠 クイズ！この意味はなーんだ？")
-      .setDescription(`**意味:**\n${word.meaning}`)
+      .setColor(Colors.Aqua)
+      .setTitle("🌐 Wikiクイズ！この単語はなーんだ？")
+      .setDescription(`**意味:**\n${wikiWord.meaning}`)
       .setFooter({ text: "15秒以内に単語をチャットで答えてね！" });
-
-    if (word.imageUrl) embed.setImage(word.imageUrl);
 
     await interaction.editReply({ embeds: [embed] });
     const quizMessage = await interaction.fetchReply();
@@ -100,15 +95,12 @@ export const quizCommand = async (interaction: ChatInputCommandInteraction) => {
       return;
     }
 
-    // クイズ中はこのチャンネルの自動応答を一時停止する
     const quizChannelId = channel.id;
     markQuizChannelActive(quizChannelId);
 
     const filter = (m: Message) => !m.author.bot;
     let solved = false;
-    const normalizedTitles = new Set(
-      word.titles.map((t) => normalizeForQuizMatch(t.text)),
-    );
+    const normalizedAnswer = normalizeForQuizMatch(wikiWord.term);
 
     const collector = channel.createMessageCollector({
       filter,
@@ -118,13 +110,10 @@ export const quizCommand = async (interaction: ChatInputCommandInteraction) => {
     collector.on("collect", async (m: Message) => {
       if (solved) return;
 
-      const normalizedAnswer = normalizeForQuizMatch(m.content);
-      const isCorrect = normalizedTitles.has(normalizedAnswer);
-      const titleText = word.titles.map((t) => t.text).join(" / ");
-
-      if (isCorrect) {
+      const answer = normalizeForQuizMatch(m.content);
+      if (answer === normalizedAnswer) {
         solved = true;
-        await m.reply(`🎉 **正解です！** (${titleText})`);
+        await m.reply(`🎉 **正解です！** (${wikiWord.term})`);
         await m.react("⭕");
         collector.stop("answered");
         return;
@@ -135,14 +124,12 @@ export const quizCommand = async (interaction: ChatInputCommandInteraction) => {
 
     collector.on("end", async () => {
       if (!solved) {
-        const titleText = word.titles.map((t) => t.text).join(" / ");
-        interaction.followUp(
-          `⏰ **時間切れ！** 正解は **「${titleText}」** でした。`,
+        await interaction.followUp(
+          `⏰ **時間切れ！** 正解は **「${wikiWord.term}」** でした。`,
         );
       }
 
       unmarkQuizChannelActive(quizChannelId);
-
       releaseLock();
     });
   } catch (error) {

@@ -35,7 +35,7 @@ const client = new Client({
 client.once(Events.ClientReady, (c) => {
   console.log(`準備OK！ ${c.user.tag} が起動しました。`);
   console.log(
-    `コマンド同期完了: /add, /add_wiki, /quiz, /escape, /list, /delete, /update, /search, /introduction, /request が使えます`,
+    `コマンド同期完了: /add, /add_wiki, /quiz, /wiki-quiz, /escape, /list, /delete, /update, /search, /introduction, /request が使えます`,
   );
 });
 
@@ -48,6 +48,7 @@ const commandMap: { [key: string]: (interaction: any) => Promise<void> } = {
   update: commands.updateCommand,
   search: commands.searchCommand,
   quiz: commands.quizCommand,
+  "wiki-quiz": commands.wikiQuizCommand,
   introduction: commands.introductionCommand,
   request: commands.requestCommand,
 };
