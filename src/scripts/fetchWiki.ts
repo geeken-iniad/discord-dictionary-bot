@@ -49,7 +49,8 @@ async function getPageNamesFromCategory(
     throw new Error(`Wikipedia API error: ${data.error.info}`);
   }
 
-  const titles = data.query?.categorymembers?.map((member) => member.title) || [];
+  const titles =
+    data.query?.categorymembers?.map((member) => member.title) || [];
   const newContinueToken = data.continue?.cmcontinue;
 
   return { titles, continueToken: newContinueToken };
@@ -99,16 +100,14 @@ async function main() {
   try {
     console.log("🚀 Wikipedia IT用語辞書取得スクリプトを開始します...");
 
-    const categoryName = "Category:ウェブサイト";
+    const categoryName = "Category:インターネット";
     let continueToken: string | undefined;
     let totalProcessed = 0;
     let totalSaved = 0;
 
     // カテゴリ内の全ページを取得（ページネーション対応）
     do {
-      console.log(
-        `📖 カテゴリ「${categoryName}」からページを取得中...`,
-      );
+      console.log(`📖 カテゴリ「${categoryName}」からページを取得中...`);
 
       const { titles, continueToken: newToken } =
         await getPageNamesFromCategory(categoryName, continueToken);

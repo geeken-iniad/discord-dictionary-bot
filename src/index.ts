@@ -1,6 +1,8 @@
 // src/index.ts
 import {
   Client,
+  Colors,
+  EmbedBuilder,
   Events,
   GatewayIntentBits,
   Interaction,
@@ -58,6 +60,99 @@ client.on(Events.MessageCreate, async (message) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction: Interaction) => {
+  if (interaction.isButton()) {
+    if (
+      interaction.customId.startsWith("dict_word_") ||
+      interaction.customId.startsWith("dict_wiki_")
+    ) {
+      try {
+        const [, kind, idText] = interaction.customId.split("_");
+        const entityId = Number(idText);
+
+        if (!Number.isInteger(entityId)) {
+          await interaction.reply({
+            content: "❌ 無効なボタンです。",
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        if (kind === "word") {
+          const guildId = interaction.guildId || "global";
+          const word = await prisma.word.findFirst({
+            where: {
+              id: entityId,
+              guildId,
+            },
+            include: { titles: true },
+          });
+
+          if (!word) {
+            await interaction.reply({
+              content: "❌ 解説データが見つかりませんでした。",
+              flags: MessageFlags.Ephemeral,
+            });
+            return;
+          }
+
+          const titleText =
+            word.titles.map((t) => t.text).join(" / ") || "詳細";
+          const embed = new EmbedBuilder()
+            .setColor(Colors.Blue)
+            .setTitle(`📚 解説: ${titleText}`)
+            .setDescription(word.meaning)
+            .setFooter({ text: "この表示はあなたにだけ見えています" });
+
+          if (word.imageUrl) embed.setImage(word.imageUrl);
+          if (word.link) embed.setURL(word.link);
+          if (word.tag) {
+            embed.addFields({ name: "🏷️ タグ", value: word.tag, inline: true });
+          }
+
+          await interaction.reply({
+            embeds: [embed],
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
+        if (kind === "wiki") {
+          const wikiWord = await prisma.wikiWord.findUnique({
+            where: { id: entityId },
+          });
+
+          if (!wikiWord) {
+            await interaction.reply({
+              content: "❌ Wiki解説データが見つかりませんでした。",
+              flags: MessageFlags.Ephemeral,
+            });
+            return;
+          }
+
+          const embed = new EmbedBuilder()
+            .setColor(Colors.Blue)
+            .setTitle(`📚 説明: ${wikiWord.term}`)
+            .setDescription(wikiWord.meaning)
+            .setFooter({ text: "📚 Wikipediaより引用 (自動補完)" })
+            .setURL(wikiWord.link);
+
+          await interaction.reply({
+            embeds: [embed],
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+      } catch (error) {
+        console.error("Guide Button Error", error);
+        await interaction.reply({
+          content: "❌ 解説の表示中にエラーが発生しました。",
+          flags: MessageFlags.Ephemeral,
+        });
+        return;
+      }
+    }
+  }
+
   // 🅰️ スラッシュコマンド
   if (interaction.isChatInputCommand()) {
     const { commandName } = interaction;

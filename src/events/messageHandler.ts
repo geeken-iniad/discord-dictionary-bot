@@ -1,4 +1,9 @@
-import { Colors, EmbedBuilder, Message } from "discord.js";
+import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  Message,
+} from "discord.js";
 import { prisma } from "../prismaClient";
 import { isQuizChannelActive } from "../utils/quizState";
 
@@ -16,7 +21,7 @@ function normalize(str: string): string {
 }
 
 function escapeRegExp(str: string) {
-  return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function getTermCooldownKey(channelId: string, term: string): string {
@@ -54,16 +59,14 @@ function getWordCooldownKeys(
 // Wiki辞書から単語を検索する関数
 async function findWikiMatches(
   normalizedContent: string,
-  allWikiWords: { term: string; meaning: string; link: string }[],
+  allWikiWords: { id: number; term: string; meaning: string; link: string }[],
 ): Promise<typeof allWikiWords> {
   const matches: typeof allWikiWords = [];
 
   for (const wikiWord of allWikiWords) {
     const targetWord = normalize(wikiWord.term);
     const escapedWord = escapeRegExp(targetWord);
-    const regex = new RegExp(
-      `(?<![a-z0-9_])${escapedWord}(?![a-z0-9_])`,
-    );
+    const regex = new RegExp(`(?<![a-z0-9_])${escapedWord}(?![a-z0-9_])`);
 
     if (regex.test(normalizedContent)) {
       matches.push(wikiWord);
@@ -71,6 +74,27 @@ async function findWikiMatches(
   }
 
   return matches;
+}
+
+function buildGuideButtons(
+  items: Array<{ id: number; label: string; type: "word" | "wiki" }>,
+) {
+  const rows: ActionRowBuilder<ButtonBuilder>[] = [];
+
+  for (let i = 0; i < items.length && i < 25; i += 5) {
+    const chunk = items.slice(i, i + 5);
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+      chunk.map((item) =>
+        new ButtonBuilder()
+          .setCustomId(`dict_${item.type}_${item.id}`)
+          .setLabel(item.label.substring(0, 80))
+          .setStyle(ButtonStyle.Primary),
+      ),
+    );
+    rows.push(row);
+  }
+
+  return rows;
 }
 
 export const handleMessage = async (message: Message) => {
@@ -163,7 +187,10 @@ export const handleMessage = async (message: Message) => {
       const allWikiWords = await prisma.wikiWord.findMany();
 
       // Embed作成用に、Wiki辞書のマッチを見つける
-      const wikiMatches = await findWikiMatches(normalizedContent, allWikiWords);
+      const wikiMatches = await findWikiMatches(
+        normalizedContent,
+        allWikiWords,
+      );
 
       // Wiki辞書も24時間クールダウン対象にする
       const availableWikiMatches = wikiMatches.filter((wikiWord) => {
@@ -174,18 +201,6 @@ export const handleMessage = async (message: Message) => {
       if (availableWikiMatches.length === 0) {
         return; // カスタム＆Wiki辞書ともヒットなし
       }
-
-      // Wiki辞書がヒットした場合のEmbed作成
-      const wikiEmbeds = availableWikiMatches.map((wikiWord) => {
-        const embed = new EmbedBuilder()
-          .setColor(Colors.Blue)
-          .setTitle(`📚 説明: ${wikiWord.term}`)
-          .setDescription(wikiWord.meaning)
-          .setFooter({ text: "📚 Wikipediaより引用 (自動補完)" })
-          .setURL(wikiWord.link);
-
-        return embed;
-      });
 
       // Wiki辞書用のクールダウン管理（カスタム辞書と同じ仕組みを流用）
       const setCooldownsForWiki = () => {
@@ -198,56 +213,25 @@ export const handleMessage = async (message: Message) => {
         );
       };
 
-      // Wiki辞書メッセージ送信
-      let wikiThread = message.thread;
-      if (!wikiThread) {
-        try {
-          wikiThread = await message.startThread({
-            name: `解説: ${availableWikiMatches[0]?.term || "用語"}（Wiki）`,
-            autoArchiveDuration: 60,
-            reason: "Wikipedia用語解説のため",
-          });
-        } catch (e) {
-          console.error(e);
-          await message.reply({
-            embeds: wikiEmbeds,
-            allowedMentions: { repliedUser: false, parse: [] },
-          });
+      const wikiGuideButtons = buildGuideButtons(
+        availableWikiMatches.map((wikiWord) => ({
+          id: wikiWord.id,
+          label: wikiWord.term,
+          type: "wiki" as const,
+        })),
+      );
 
-          setCooldownsForWiki();
-          return;
-        }
-      }
-
-      await wikiThread.send({
-        content: "用語が見つかりました！(Wikipedia)",
-        embeds: wikiEmbeds,
-        allowedMentions: { parse: [] },
+      await message.reply({
+        content:
+          "📚 関連ワードを検知しました。**解説を見る**ボタンを押すと、押した人にだけ表示されます。",
+        components: wikiGuideButtons,
+        allowedMentions: { repliedUser: false, parse: [] },
       });
 
       setCooldownsForWiki();
       return;
     }
     // ==========================================
-
-    // 4. 解説Embedを作成 (生き残った単語だけで作る)
-    const embeds = hits.map((word) => {
-      const titleText =
-        word.titles && word.titles.length > 0 ? word.titles[0].text : "詳細";
-
-      const embed = new EmbedBuilder()
-        .setColor(Colors.Blue)
-        .setTitle(`📚 解説: ${titleText}`)
-        .setDescription(word.meaning)
-        .setFooter({ text: "💡 同じ単語の連続反応は制限されています" });
-
-      if (word.imageUrl) embed.setImage(word.imageUrl);
-      if (word.link) embed.setURL(word.link);
-      if (word.tag)
-        embed.addFields({ name: "🏷️ タグ", value: word.tag, inline: true });
-
-      return embed;
-    });
 
     // 👇 タイマーをセットする共通の関数
     const setCooldowns = () => {
@@ -261,42 +245,30 @@ export const handleMessage = async (message: Message) => {
           replyCooldowns.set(key, Date.now());
         });
       });
-      console.log(`⏱️ チャンネル(${channelId})で ${hits.length}個の単語を解説。これらは24時間休止します。`);
+      console.log(
+        `⏱️ チャンネル(${channelId})で ${hits.length}個の単語を解説。これらは24時間休止します。`,
+      );
     };
 
-    // 5. 送信処理
+    const wordGuideButtons = buildGuideButtons(
+      hits.map((word) => ({
+        id: word.id,
+        label:
+          hitTitles.find((t) => t.wordId === word.id)?.text ||
+          word.titles?.[0]?.text ||
+          "詳細",
+        type: "word" as const,
+      })),
+    );
 
-    // ▼ 通常チャンネルなら、スレッドを作ってそこに投稿する
-    let thread = message.thread;
-    if (!thread) {
-      try {
-        thread = await message.startThread({
-          // ※ヒットした単語のうち、最初の単語の名前をスレッド名にする
-          name: `解説: ${hitTitles.find(t => t.wordId === hits[0].id)?.text || "用語"}`,
-          autoArchiveDuration: 60,
-          reason: "用語解説のため",
-        });
-      } catch (e) {
-        console.error(e);
-        await message.reply({
-          embeds: embeds,
-          allowedMentions: { repliedUser: false, parse: [] },
-        });
-        
-        setCooldowns();
-        return;
-      }
-    }
-
-    // スレッドの中に書き込む
-    await thread.send({
-      content: "用語が見つかりました！",
-      embeds: embeds,
+    await message.reply({
+      content:
+        "📚 関連ワードを検知しました。**解説を見る**ボタンを押すと、押した人にだけ表示されます。",
+      components: wordGuideButtons,
       allowedMentions: { parse: [] },
     });
 
     setCooldowns(); // 送信成功後にタイマーセット！
-
   } catch (error) {
     console.error("AutoResponse Error:", error);
   }
