@@ -1,19 +1,22 @@
 import {
-  ChatInputCommandInteraction,
-  Colors,
-  EmbedBuilder,
-  Message,
-  MessageFlags,
-  SlashCommandBuilder,
+    ChatInputCommandInteraction,
+    Colors,
+    EmbedBuilder,
+    Message,
+    MessageFlags,
+    SlashCommandBuilder,
 } from "discord.js";
 import { prisma } from "../prismaClient";
 import {
-  isQuizGuildActive,
-  markQuizChannelActive,
-  markQuizGuildActive,
-  unmarkQuizChannelActive,
-  unmarkQuizGuildActive,
+    isQuizGuildActive,
+    markQuizChannelActive,
+    markQuizGuildActive,
+    unmarkQuizChannelActive,
+    unmarkQuizGuildActive,
 } from "../utils/quizState";
+
+const QUIZ_RECENT_LIMIT = 10;
+const recentQuizWordIdsByGuild = new Map<string, number[]>();
 
 // messageHandler と同じ正規化ロジックを使用
 function normalizeForQuizMatch(str: string): string {
@@ -53,28 +56,32 @@ export const quizCommand = async (interaction: ChatInputCommandInteraction) => {
   try {
     await interaction.deferReply();
 
-    const count = await prisma.word.count({
+    const allWords = await prisma.word.findMany({
       where: { guildId },
+      include: { titles: true },
     });
-    if (count === 0) {
+
+    if (allWords.length === 0) {
       await interaction.editReply("❌ まだ単語が登録されていません。");
       releaseLock();
       return;
     }
 
-    const randomIndex = Math.floor(Math.random() * count);
-    const [word] = await prisma.word.findMany({
-      where: { guildId },
-      take: 1,
-      skip: randomIndex,
-      include: { titles: true },
-    });
+    const recentIds = recentQuizWordIdsByGuild.get(guildId) || [];
+    const recentIdSet = new Set(recentIds);
+    const candidateWords = allWords.filter((w) => !recentIdSet.has(w.id));
+    const sourceWords = candidateWords.length > 0 ? candidateWords : allWords;
+    const randomIndex = Math.floor(Math.random() * sourceWords.length);
+    const word = sourceWords[randomIndex];
 
     if (!word) {
       await interaction.editReply("❌ 取得エラー。");
       releaseLock();
       return;
     }
+
+    const updatedRecentIds = [...recentIds, word.id].slice(-QUIZ_RECENT_LIMIT);
+    recentQuizWordIdsByGuild.set(guildId, updatedRecentIds);
 
     const embed = new EmbedBuilder()
       .setColor(Colors.Gold)
