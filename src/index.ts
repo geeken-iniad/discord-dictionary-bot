@@ -1,24 +1,24 @@
 // src/index.ts
 import {
-  Client,
-  Colors,
-  EmbedBuilder,
-  Events,
-  GatewayIntentBits,
-  Interaction,
-  InteractionReplyOptions, // 👈 追加
-  MessageFlags,
+    Client,
+    Colors,
+    EmbedBuilder,
+    Events,
+    GatewayIntentBits,
+    Interaction,
+    InteractionReplyOptions, // 👈 追加
+    MessageFlags,
 } from "discord.js";
 import dotenv from "dotenv";
 import { prisma } from "./prismaClient";
 import {
-  hasDisallowedMention,
-  MENTION_BLOCK_MESSAGE,
+    hasDisallowedMention,
+    MENTION_BLOCK_MESSAGE,
 } from "./utils/mentionGuard";
 import {
-  findDuplicateTitle,
-  getExistingTitleSet,
-  normalizeTitle,
+    findDuplicateTitle,
+    getExistingTitleSet,
+    normalizeTitle,
 } from "./utils/wordRegistration";
 
 import * as commands from "./commands";
@@ -37,7 +37,7 @@ const client = new Client({
 client.once(Events.ClientReady, (c) => {
   console.log(`準備OK！ ${c.user.tag} が起動しました。`);
   console.log(
-    `コマンド同期完了: /add, /add_wiki, /quiz, /wiki-quiz, /escape, /list, /delete, /update, /search, /introduction, /request が使えます`,
+    `コマンド同期完了: /add, /add_wiki, /quiz, /wiki-quiz, /escape, /list, /delete, /update, /search, /introduction, /request, context-delete が使えます`,
   );
 });
 
@@ -194,6 +194,23 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
         console.error(`Context Menu Error`, error);
 
         // 👇 ここも修正！型を明示します
+        const reply: InteractionReplyOptions = {
+          content: "❌ エラーが発生しました",
+          flags: MessageFlags.Ephemeral,
+        };
+
+        if (interaction.replied || interaction.deferred) {
+          await interaction.followUp(reply);
+        } else {
+          await interaction.reply(reply);
+        }
+      }
+    } else if (interaction.commandName === "context-delete") {
+      try {
+        await commands.contextDeleteCommand(interaction);
+      } catch (error) {
+        console.error(`Context Delete Menu Error`, error);
+
         const reply: InteractionReplyOptions = {
           content: "❌ エラーが発生しました",
           flags: MessageFlags.Ephemeral,

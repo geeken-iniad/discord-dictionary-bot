@@ -3,20 +3,21 @@ import dotenv from "dotenv";
 
 // 各コマンドの読み込み
 import {
-  data as addData,
-  addFromMeaningData,
-  addFromWordData,
+    data as addData,
+    addFromMeaningData,
+    addFromWordData,
 } from "./commands/add";
 import { data as addWikiData } from "./commands/add_wiki";
+import { contextDeleteData } from "./commands/context_delete";
 import { data as deleteData } from "./commands/delete";
 import { data as escapeData } from "./commands/escape";
 import { data as introData } from "./commands/introduction";
 import { data as listData } from "./commands/list";
 import { data as quizData } from "./commands/quiz";
-import { data as wikiQuizData } from "./commands/wiki_quiz";
 import { data as requestData } from "./commands/request";
 import { data as searchData } from "./commands/search";
 import { data as updateData } from "./commands/update";
+import { data as wikiQuizData } from "./commands/wiki_quiz";
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ const commands = [
   addData.toJSON(),
   addFromMeaningData.toJSON(),
   addFromWordData.toJSON(),
+  contextDeleteData.toJSON(),
   addWikiData.toJSON(),
   quizData.toJSON(),
   wikiQuizData.toJSON(),
