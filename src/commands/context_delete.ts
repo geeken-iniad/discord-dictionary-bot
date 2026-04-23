@@ -31,7 +31,8 @@ function normalizeText(str: string): string {
 function toBigrams(text: string): Set<string> {
   const chars = [...text];
   if (chars.length < 2) {
-    return new Set(chars.length === 1 ? [chars[0]] : []);
+    const single = chars[0];
+    return single ? new Set([single]) : new Set();
   }
 
   const bigrams = new Set<string>();
