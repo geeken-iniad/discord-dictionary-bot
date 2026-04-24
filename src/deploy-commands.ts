@@ -3,11 +3,13 @@ import dotenv from "dotenv";
 
 // 各コマンドの読み込み
 import {
-    data as addData,
-    addFromMeaningData,
-    addFromWordData,
+  data as addData,
+  addFromMeaningData,
+  addFromWordData,
 } from "./commands/add";
+import { data as addCalenderData } from "./commands/add_calender";
 import { data as addWikiData } from "./commands/add_wiki";
+import { data as calenderListData } from "./commands/calender_list";
 import { contextDeleteData } from "./commands/context_delete";
 import { data as deleteData } from "./commands/delete";
 import { data as escapeData } from "./commands/escape";
@@ -25,6 +27,8 @@ const commands = [
   updateData.toJSON(),
   listData.toJSON(),
   addData.toJSON(),
+  addCalenderData.toJSON(),
+  calenderListData.toJSON(),
   addFromMeaningData.toJSON(),
   addFromWordData.toJSON(),
   contextDeleteData.toJSON(),

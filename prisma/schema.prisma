@@ -44,3 +44,13 @@ model WikiWord {
   link      String
   updatedAt DateTime @updatedAt
 }
+
+model CalendarEvent {
+  id         Int      @id @default(autoincrement())
+  guildId    String   @default("global")
+  eventName  String
+  eventAt    DateTime
+  authorName String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @default(now()) @updatedAt
+}
