@@ -9,6 +9,8 @@
     "build": "tsc",
     "start": "npx prisma db push && node dist/deploy-commands.js && node dist/index.js",
     "fetch-wiki": "ts-node src/scripts/fetchWiki.ts",
+    "enrich-context:dry": "ts-node src/scripts/enrichContextKeywords.ts",
+    "enrich-context:apply": "ts-node src/scripts/enrichContextKeywords.ts --apply",
     "postinstall": "prisma generate"
   },
   "repository": {
