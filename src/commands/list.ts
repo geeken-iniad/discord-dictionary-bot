@@ -27,14 +27,14 @@ export const data = new SlashCommandBuilder()
 export const listCommand = async (interaction: ChatInputCommandInteraction) => {
   try {
     await interaction.deferReply();
-    
+
     // 👇 【追加】今いるサーバーのIDを取得！
     const guildId = interaction.guildId || "global";
     const filterTag = interaction.options.getString("tag");
-    
+
     // 👇 【修正】検索条件に必ず「このサーバーのデータだけ」を含める！
-    const whereClause = filterTag 
-      ? { guildId: guildId, tag: filterTag } 
+    const whereClause = filterTag
+      ? { guildId: guildId, tag: filterTag }
       : { guildId: guildId };
 
     // 1. 総数を取得 (このサーバー内の総数になる)
@@ -44,9 +44,9 @@ export const listCommand = async (interaction: ChatInputCommandInteraction) => {
     // 2. タグ一覧を取得 (このサーバーで使われているタグだけになる)
     const existingTagsRaw = await prisma.word.groupBy({
       by: ["tag"],
-      where: { 
+      where: {
         guildId: guildId, // 👈 ここにも追加！
-        tag: { not: null } 
+        tag: { not: null },
       },
     });
     const existingTags = existingTagsRaw
@@ -89,10 +89,13 @@ export const listCommand = async (interaction: ChatInputCommandInteraction) => {
               ? `by ${word.authorName}`
               : "不明";
             const tagInfo = word.tag ? ` | 🏷️ ${word.tag}` : "";
+            const contextInfo = word.contextLabel
+              ? ` | 🧭 ${word.contextLabel}`
+              : "";
 
             return {
               name: titleText,
-              value: `${shortMeaning}\n*(${authorInfo}${tagInfo})*`,
+              value: `${shortMeaning}\n*(${authorInfo}${tagInfo}${contextInfo})*`,
               inline: false,
             };
           }),

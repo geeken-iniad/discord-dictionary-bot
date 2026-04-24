@@ -5,6 +5,11 @@ import {
   Message,
 } from "discord.js";
 import { prisma } from "../prismaClient";
+import {
+  calculateContextScore,
+  getPrimaryTitle,
+  normalizeContextText,
+} from "../utils/contextScoring";
 import { isQuizChannelActive } from "../utils/quizState";
 
 // ⏱️ タイマー用のメモ帳
@@ -177,6 +182,29 @@ export const handleMessage = async (message: Message) => {
       return cooldownKeys.every((key: string) => !isCooldownActive(key, now));
     });
 
+    const scoredHits = hits
+      .map((word) => ({
+        word,
+        score: calculateContextScore(
+          word,
+          normalizeContextText(contentWithoutUrl),
+        ),
+        group: getPrimaryTitle(word),
+      }))
+      .sort((a, b) => b.score - a.score);
+
+    const groupedHits = new Map<string, (typeof scoredHits)[number]>();
+    scoredHits.forEach((item) => {
+      const current = groupedHits.get(item.group);
+      if (!current || item.score > current.score) {
+        groupedHits.set(item.group, item);
+      }
+    });
+
+    hits = Array.from(groupedHits.values())
+      .sort((a, b) => b.score - a.score)
+      .map((item) => item.word);
+
     // もし全部の単語がクールダウン中だったら、ここで優先度2へ！
     if (hits.length === 0) {
       // ============================================
@@ -253,10 +281,11 @@ export const handleMessage = async (message: Message) => {
     const wordGuideButtons = buildGuideButtons(
       hits.map((word) => ({
         id: word.id,
-        label:
+        label: `${
           hitTitles.find((t) => t.wordId === word.id)?.text ||
           word.titles?.[0]?.text ||
-          "詳細",
+          "詳細"
+        }${word.contextLabel ? ` · ${word.contextLabel}` : ""}`,
         type: "word" as const,
       })),
     );

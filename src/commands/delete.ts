@@ -33,14 +33,14 @@ export const deleteCommand = async (
     // 👇 【追加】今いるサーバーのIDを取得！
     const guildId = interaction.guildId || "global";
 
-    // 1. 入力された単語から、親(Word)と兄弟(Titles)を全部探す
-    const targetTitle = await prisma.title.findFirst({
-      where: { 
+    // 1. 入力された単語から、候補を全部探す
+    const matchingTitles = await prisma.title.findMany({
+      where: {
         text: targetText,
         // 👇 【修正】「このサーバーの単語」だけを対象にする！
         word: {
-          guildId: guildId 
-        }
+          guildId: guildId,
+        },
       },
       include: {
         word: {
@@ -49,14 +49,84 @@ export const deleteCommand = async (
       },
     });
 
-    if (!targetTitle) {
+    const uniqueWords = Array.from(
+      new Map(
+        matchingTitles.map((title) => [title.word.id, title.word]),
+      ).values(),
+    );
+
+    if (uniqueWords.length === 0) {
       await interaction.editReply(
         `❌ **「${targetText}」** は登録されていません。`,
       );
       return;
     }
 
-    const word = targetTitle.word;
+    const initialWord = uniqueWords[0];
+    if (!initialWord) {
+      await interaction.editReply("❌ 候補が見つかりませんでした。");
+      return;
+    }
+
+    let word = initialWord;
+
+    if (uniqueWords.length > 1) {
+      const chooseMenu = new StringSelectMenuBuilder()
+        .setCustomId("deleteChooseWord")
+        .setPlaceholder("削除対象の候補を選択してください...")
+        .addOptions(
+          uniqueWords.slice(0, 25).map((candidate) => {
+            const titleText = candidate.titles.map((t) => t.text).join(" / ");
+            const contextText = candidate.contextLabel || "no context";
+            const shortMeaning =
+              candidate.meaning.length > 60
+                ? `${candidate.meaning.substring(0, 57)}...`
+                : candidate.meaning;
+
+            return new StringSelectMenuOptionBuilder()
+              .setLabel(titleText.substring(0, 100))
+              .setDescription(
+                `${contextText} | ${shortMeaning}`.substring(0, 100),
+              )
+              .setValue(candidate.id.toString());
+          }),
+        );
+
+      const chooseRow =
+        new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+          chooseMenu,
+        );
+
+      await interaction.editReply({
+        content: `🔎 **「${targetText}」** に一致する候補が複数あります。削除したいものを選んでください。`,
+        embeds: [],
+        components: [chooseRow],
+      });
+
+      const chooseMessage = await interaction.fetchReply();
+      const chooseSelection = await chooseMessage.awaitMessageComponent({
+        componentType: ComponentType.StringSelect,
+        time: 60_000,
+        filter: (i) => i.user.id === interaction.user.id,
+      });
+
+      const selectedId = Number(chooseSelection.values[0]);
+      const selectedWord = uniqueWords.find(
+        (candidate) => candidate.id === selectedId,
+      );
+
+      if (!selectedWord) {
+        await chooseSelection.update({
+          content: "❌ 候補が見つかりませんでした。",
+          components: [],
+          embeds: [],
+        });
+        return;
+      }
+
+      word = selectedWord;
+    }
+
     const allTitles = word.titles;
 
     // 2. セレクトメニューの選択肢を作る

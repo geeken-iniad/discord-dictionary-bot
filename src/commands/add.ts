@@ -12,10 +12,9 @@ import {
 } from "discord.js";
 import { prisma } from "../prismaClient";
 import {
-  findDuplicateTitle,
-  getExistingTitleSet,
-  normalizeTitle,
-} from "../utils/wordRegistration";
+  findDuplicateWithinInput,
+  splitContextKeywords,
+} from "../utils/contextScoring";
 import {
   hasDisallowedMention,
   MENTION_BLOCK_MESSAGE,
@@ -58,6 +57,18 @@ export const data = new SlashCommandBuilder()
       .setName("tag")
       .setDescription("タグ/カテゴリー (例: プログラミング, 料理)")
       .setRequired(false),
+  )
+  .addStringOption((option) =>
+    option
+      .setName("context")
+      .setDescription("文脈ラベル (例: programming, animal)")
+      .setRequired(false),
+  )
+  .addStringOption((option) =>
+    option
+      .setName("keywords")
+      .setDescription("文脈キーワード (カンマ区切り)")
+      .setRequired(false),
   );
 
 export const addCommand = async (interaction: ChatInputCommandInteraction) => {
@@ -71,6 +82,8 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
     const inputMeaning = interaction.options.getString("meaning");
     const inputLink = interaction.options.getString("link");
     const inputTag = interaction.options.getString("tag");
+    const inputContext = interaction.options.getString("context");
+    const inputKeywords = interaction.options.getString("keywords");
     const image = interaction.options.getAttachment("image");
 
     if (!inputWord) return;
@@ -89,12 +102,11 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
         .map((t) => t.trim())
         .filter((t) => t.length > 0);
 
-      const existingTitles = await getExistingTitleSet(guildId);
-      const duplicateTitle = findDuplicateTitle(titles, existingTitles);
+      const duplicateTitle = findDuplicateWithinInput(titles);
 
       if (duplicateTitle) {
         await interaction.editReply(
-          `❌ **「${duplicateTitle}」** は既にこのサーバーに登録されています。`,
+          `❌ **「${duplicateTitle}」** がこの入力内で重複しています。`,
         );
         return;
       }
@@ -103,6 +115,9 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
         data: {
           guildId: guildId, // 👈 【追加】サーバー名札をつける！
           meaning: inputMeaning,
+          contextLabel: inputContext || null,
+          contextKeywords:
+            splitContextKeywords(inputKeywords).join(",") || null,
           imageUrl: image ? image.url : null,
           link: inputLink,
           tag: inputTag,
@@ -138,7 +153,6 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
 
     let successCount = 0;
     const failedWords: string[] = [];
-    const existingTitles = await getExistingTitleSet(guildId);
 
     for (const entry of validEntries) {
       const [titlePart, meaningPart] = entry.split("=").map((s) => s.trim());
@@ -158,10 +172,10 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
         .map((t) => t.trim())
         .filter((t) => t.length > 0);
 
-      const duplicateTitle = findDuplicateTitle(titles, existingTitles);
+      const duplicateTitle = findDuplicateWithinInput(titles);
 
       if (duplicateTitle) {
-        failedWords.push(`${titlePart} (既に登録済み: ${duplicateTitle})`);
+        failedWords.push(`${titlePart} (入力内で重複: ${duplicateTitle})`);
         continue;
       }
 
@@ -170,6 +184,9 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
           data: {
             guildId: guildId, // 👈 【追加】ここにもサーバー名札をつける！
             meaning: meaningPart,
+            contextLabel: inputContext || null,
+            contextKeywords:
+              splitContextKeywords(inputKeywords).join(",") || null,
             imageUrl: successCount === 0 && image ? image.url : null,
             link: successCount === 0 && inputLink ? inputLink : null,
             tag: inputTag,
@@ -179,7 +196,6 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
             },
           },
         });
-        titles.forEach((title) => existingTitles.add(normalizeTitle(title)));
         successCount++;
       } catch (error) {
         failedWords.push(titlePart);
@@ -209,6 +225,8 @@ export const contextAddCommand = async (
     let modalTitle = "";
     let defaultWord = "";
     let defaultMeaning = "";
+    let defaultContext = "";
+    let defaultKeywords = "";
 
     if (interaction.commandName === "📖 意味を引用して登録") {
       modalTitle = "引用登録 (意味)";
@@ -217,7 +235,7 @@ export const contextAddCommand = async (
       modalTitle = "引用登録 (単語名)";
       defaultWord = textContent;
     } else {
-      return; 
+      return;
     }
 
     const modal = new ModalBuilder()
@@ -238,9 +256,26 @@ export const contextAddCommand = async (
       .setValue(defaultMeaning.substring(0, 3900))
       .setRequired(true);
 
+    const contextInput = new TextInputBuilder()
+      .setCustomId("contextInput")
+      .setLabel("文脈ラベル (任意)")
+      .setStyle(TextInputStyle.Short)
+      .setValue(defaultContext.substring(0, 100))
+      .setRequired(false);
+
+    const keywordsInput = new TextInputBuilder()
+      .setCustomId("keywordsInput")
+      .setLabel("文脈キーワード (任意)")
+      .setStyle(TextInputStyle.Short)
+      .setPlaceholder("例: 開発,コード,関数")
+      .setValue(defaultKeywords.substring(0, 100))
+      .setRequired(false);
+
     modal.addComponents(
       new ActionRowBuilder<TextInputBuilder>().addComponents(wordInput),
       new ActionRowBuilder<TextInputBuilder>().addComponents(meaningInput),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(contextInput),
+      new ActionRowBuilder<TextInputBuilder>().addComponents(keywordsInput),
     );
 
     await interaction.showModal(modal);

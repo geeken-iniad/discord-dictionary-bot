@@ -10,6 +10,10 @@ import {
 } from "discord.js";
 import * as Levenshtein from "fast-levenshtein";
 import { prisma } from "../prismaClient";
+import {
+  calculateContextScore,
+  normalizeContextText,
+} from "../utils/contextScoring";
 const { get } = Levenshtein;
 
 export const data = new SlashCommandBuilder()
@@ -23,14 +27,6 @@ export const data = new SlashCommandBuilder()
   );
 
 // 🪄 魔法の関数: 文字を「小文字」かつ「カタカナ」に統一する
-function normalize(str: string): string {
-  return str
-    .replace(/[\u3041-\u3096]/g, (match) =>
-      String.fromCharCode(match.charCodeAt(0) + 0x60),
-    )
-    .toLowerCase();
-}
-
 export const searchCommand = async (
   interaction: ChatInputCommandInteraction,
 ) => {
@@ -55,11 +51,15 @@ export const searchCommand = async (
     });
 
     // 2. 正規化して検索 (完全一致 or 部分一致)
-    const normalizedKeyword = normalize(keyword);
+    const normalizedKeyword = normalizeContextText(keyword);
 
-    const matchedTitles = allTitles.filter((t) => {
-      return normalize(t.text).includes(normalizedKeyword);
-    });
+    const matchedTitles = allTitles
+      .filter((t) => normalizeContextText(t.text).includes(normalizedKeyword))
+      .sort(
+        (a, b) =>
+          calculateContextScore(b.word, normalizedKeyword) -
+          calculateContextScore(a.word, normalizedKeyword),
+      );
 
     // --- ヒットした場合 (そのまま表示) ---
     if (matchedTitles.length > 0) {
@@ -82,7 +82,7 @@ export const searchCommand = async (
         if (!embed.data.url && word.link) embed.setURL(word.link);
 
         embed.addFields({
-          name: `📌 ${title.text}`,
+          name: `📌 ${title.text}${word.contextLabel ? ` · ${word.contextLabel}` : ""}`,
           value:
             word.meaning.length > 100
               ? word.meaning.substring(0, 97) + "..."
@@ -103,10 +103,14 @@ export const searchCommand = async (
     const candidates = allTitles
       .map((t) => {
         const distance = get(keyword.toLowerCase(), t.text.toLowerCase());
-        return { ...t, distance };
+        const score = calculateContextScore(
+          t.word,
+          normalizeContextText(keyword),
+        );
+        return { ...t, distance, score };
       })
       .filter((t) => t.distance <= 3) // 3文字以内のミスなら許容
-      .sort((a, b) => a.distance - b.distance)
+      .sort((a, b) => a.distance - b.distance || b.score - a.score)
       .slice(0, 3);
 
     if (candidates.length === 0) {

@@ -66,24 +66,99 @@ export const updateCommand = async (
 // ---------------------------------------------------------
 async function handleWordUpdate(interaction: ChatInputCommandInteraction) {
   const wordText = interaction.options.getString("word", true);
-  
+
   // 👇 【追加】今いるサーバーのIDを取得！
   const guildId = interaction.guildId || "global";
 
-  const word = await prisma.word.findFirst({
+  const matchingTitles = await prisma.title.findMany({
     where: {
-      guildId: guildId, // 👈 【修正】このサーバーの単語だけを探す！
-      titles: { some: { text: wordText } },
+      text: wordText,
+      word: {
+        guildId: guildId, // 👈 【修正】このサーバーの単語だけを探す！
+      },
     },
-    include: { titles: true },
+    include: {
+      word: { include: { titles: true } },
+    },
   });
 
-  if (!word) {
+  const uniqueWords = Array.from(
+    new Map(
+      matchingTitles.map((title) => [title.word.id, title.word]),
+    ).values(),
+  );
+
+  if (uniqueWords.length === 0) {
     await interaction.reply({
       content: `❌ 単語 **「${wordText}」** が見つかりませんでした。`,
       flags: MessageFlags.Ephemeral,
     });
     return;
+  }
+
+  const initialWord = uniqueWords[0];
+  if (!initialWord) {
+    await interaction.reply({
+      content: `❌ 単語 **「${wordText}」** が見つかりませんでした。`,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
+
+  let word = initialWord;
+
+  if (uniqueWords.length > 1) {
+    const chooseMenu = new StringSelectMenuBuilder()
+      .setCustomId("updateChooseWord")
+      .setPlaceholder("編集対象の候補を選択してください...")
+      .addOptions(
+        uniqueWords.slice(0, 25).map((candidate) => {
+          const titleText = candidate.titles.map((t) => t.text).join(" / ");
+          const contextText = candidate.contextLabel || "no context";
+          const shortMeaning =
+            candidate.meaning.length > 60
+              ? `${candidate.meaning.substring(0, 57)}...`
+              : candidate.meaning;
+
+          return new StringSelectMenuOptionBuilder()
+            .setLabel(titleText.substring(0, 100))
+            .setDescription(
+              `${contextText} | ${shortMeaning}`.substring(0, 100),
+            )
+            .setValue(candidate.id.toString());
+        }),
+      );
+
+    const chooseRow =
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(chooseMenu);
+
+    const chooseMessage = await interaction.reply({
+      content: `🔎 **「${wordText}」** に一致する候補が複数あります。編集したいものを選んでください。`,
+      components: [chooseRow],
+      flags: MessageFlags.Ephemeral,
+      fetchReply: true,
+    });
+
+    const chooseSelection = await chooseMessage.awaitMessageComponent({
+      componentType: ComponentType.StringSelect,
+      time: 60_000,
+      filter: (i) => i.user.id === interaction.user.id,
+    });
+
+    const selectedId = Number(chooseSelection.values[0]);
+    const selectedWord = uniqueWords.find(
+      (candidate) => candidate.id === selectedId,
+    );
+
+    if (!selectedWord) {
+      await chooseSelection.update({
+        content: "❌ 候補が見つかりませんでした。",
+        components: [],
+      });
+      return;
+    }
+
+    word = selectedWord;
   }
 
   const modal = new ModalBuilder()
@@ -194,7 +269,7 @@ async function handleTagsUpdate(interaction: ChatInputCommandInteraction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const keyword = interaction.options.getString("keyword") || "";
-    
+
     // 👇 【追加】今いるサーバーのIDを取得！
     const guildId = interaction.guildId || "global";
 
@@ -250,12 +325,12 @@ async function handleTagsUpdate(interaction: ChatInputCommandInteraction) {
     // 👇 【修正】タグの一覧を出す時も、このサーバーのタグだけにする！
     const existingTagsRaw = await prisma.word.groupBy({
       by: ["tag"],
-      where: { 
+      where: {
         guildId: guildId, // 👈 これを追加
-        tag: { not: null } 
+        tag: { not: null },
       },
     });
-    
+
     const existingTags = existingTagsRaw
       .map((t) => t.tag)
       .filter((t): t is string => !!t);

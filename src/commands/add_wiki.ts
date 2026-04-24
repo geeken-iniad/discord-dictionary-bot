@@ -10,7 +10,6 @@ import {
   hasDisallowedMention,
   MENTION_BLOCK_MESSAGE,
 } from "../utils/mentionGuard";
-import { getExistingTitleSet, normalizeTitle } from "../utils/wordRegistration";
 
 // 括弧内のテキスト（別名）を抽出する関数
 function extractAliases(text: string, maxAliases: number = 3): string[] {
@@ -22,7 +21,12 @@ function extractAliases(text: string, maxAliases: number = 3): string[] {
   while ((match = aliasPattern.exec(text)) && aliases.length < maxAliases) {
     const alias = match[1]?.trim() || "";
     // 1文字以上で、カンマを含まない（複合要素を避けるため）
-    if (alias && alias.length > 1 && !alias.includes("、") && !alias.includes(",")) {
+    if (
+      alias &&
+      alias.length > 1 &&
+      !alias.includes("、") &&
+      !alias.includes(",")
+    ) {
       aliases.push(alias);
     }
   }
@@ -78,15 +82,6 @@ export const addWikiCommand = async (
 
     const word = interaction.options.getString("word", true);
     const guildId = interaction.guildId || "global";
-
-    // 既に登録されているか確認
-    const existingTitles = await getExistingTitleSet(guildId);
-    const normalizedWord = normalizeTitle(word);
-
-    if (existingTitles.has(normalizedWord)) {
-      await replyErrorPrivate(interaction, "❌ 既にこの単語は登録されています");
-      return;
-    }
 
     // Wikipedia REST API を叩く
     const wikiUrl = `https://ja.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(
@@ -154,12 +149,12 @@ export const addWikiCommand = async (
       .filter((t) => t.length > 0);
 
     // 別名を titles に追加（重複排除）
-    const titlesSet = new Set(titles.map(t => normalizeTitle(t)));
-    aliases.forEach(alias => {
-      const normalizedAlias = normalizeTitle(alias);
-      if (!titlesSet.has(normalizedAlias)) {
+    const normalizedTitles = new Set(titles.map((t) => t.trim().toLowerCase()));
+    aliases.forEach((alias) => {
+      const normalizedAlias = alias.trim().toLowerCase();
+      if (!normalizedTitles.has(normalizedAlias)) {
         titles.push(alias);
-        titlesSet.add(normalizedAlias);
+        normalizedTitles.add(normalizedAlias);
       }
     });
 
@@ -169,6 +164,8 @@ export const addWikiCommand = async (
         meaning,
         link: pageUrl,
         authorName: interaction.user.username,
+        contextLabel: "wiki",
+        contextKeywords: aliases.join(","),
         titles: {
           create: titles.map((t) => ({ text: t })),
         },
@@ -181,7 +178,11 @@ export const addWikiCommand = async (
       .setTitle(`✅ Wikipediaから登録しました！`)
       .addFields(
         { name: "📚 単語", value: `**${word}**`, inline: true },
-        { name: "🔗 出典", value: "[Wikipedia](https://ja.wikipedia.org)", inline: true },
+        {
+          name: "🔗 出典",
+          value: "[Wikipedia](https://ja.wikipedia.org)",
+          inline: true,
+        },
       )
       .setDescription(meaning);
 

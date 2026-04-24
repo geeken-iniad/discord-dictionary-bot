@@ -11,15 +11,11 @@ import {
 } from "discord.js";
 import dotenv from "dotenv";
 import { prisma } from "./prismaClient";
+import { findDuplicateWithinInput } from "./utils/contextScoring";
 import {
   hasDisallowedMention,
   MENTION_BLOCK_MESSAGE,
 } from "./utils/mentionGuard";
-import {
-  findDuplicateTitle,
-  getExistingTitleSet,
-  normalizeTitle,
-} from "./utils/wordRegistration";
 
 import * as commands from "./commands";
 import { handleMessage } from "./events/messageHandler";
@@ -251,30 +247,34 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
           .map((t) => t.trim())
           .filter((t) => t.length > 0);
 
-        const existingTitles = await getExistingTitleSet(guildId);
-        const duplicateTitle = findDuplicateTitle(titles, existingTitles);
+        const duplicateTitle = findDuplicateWithinInput(titles);
 
         if (duplicateTitle) {
           await interaction.reply({
-            content: `❌ **「${duplicateTitle}」** は既にこのサーバーに登録されています。`,
+            content: `❌ **「${duplicateTitle}」** がこの入力内で重複しています。`,
             flags: MessageFlags.Ephemeral,
           });
           return;
         }
+
+        const contextInput =
+          interaction.fields.getTextInputValue("contextInput") || null;
+        const keywordsInput =
+          interaction.fields.getTextInputValue("keywordsInput") || null;
 
         // データベースに保存！
         await prisma.word.create({
           data: {
             guildId: guildId, // 👈 サーバー名札！
             meaning: inputMeaning,
+            contextLabel: contextInput,
+            contextKeywords: keywordsInput,
             authorName: interaction.user.username,
             titles: {
               create: titles.map((t) => ({ text: t })),
             },
           },
         });
-
-        titles.forEach((title) => existingTitles.add(normalizeTitle(title)));
 
         const joinedTitle = titles.join(" / ");
         await interaction.reply({

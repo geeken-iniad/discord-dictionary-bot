@@ -13,6 +13,8 @@ model Word {
   id         Int      @id @default(autoincrement())
   guildId    String   @default("global") // 👈 【追加】サーバーIDを保存する名札！（既存データエラー防止のため初期値付き）
   meaning    String
+  contextLabel String?
+  contextKeywords String?
   authorName String?
   imageUrl   String?
   link       String?
