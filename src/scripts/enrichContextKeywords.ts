@@ -137,68 +137,88 @@ async function callGemini(prompt: string): Promise<AIResult> {
     throw new Error("GEMINI_API_KEY または OPENAI_API_KEY が未設定です");
   }
 
-  const model = process.env.GEMINI_MODEL || "gemini-1.5-flash";
+  const models = [
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-2.5-flash-lite",
+    "gemini-2.0-flash-lite",
+    process.env.GEMINI_MODEL,
+    "gemini-1.5-flash",
+  ].filter((value): value is string => Boolean(value));
   const baseUrl =
     process.env.GEMINI_BASE_URL ||
-    "https://generativelanguage.googleapis.com/v1beta";
+    "https://generativelanguage.googleapis.com/v1";
 
-  const response = await fetch(
-    `${baseUrl}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              {
-                text: [
-                  "あなたは辞書Botの文脈分類器です。必ずJSONで返してください。",
-                  "contextLabelは短い英小文字スネークケース。keywordsは2-8個の短い日本語キーワード。",
-                  prompt,
-                ].join("\n"),
-              },
-            ],
-          },
-        ],
-        generationConfig: {
-          temperature: 0.2,
-          responseMimeType: "application/json",
+  let lastError: string | null = null;
+
+  for (const model of models) {
+    const response = await fetch(
+      `${baseUrl}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      }),
-    },
-  );
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: [
+                    "あなたは辞書Botの文脈分類器です。必ずJSONで返してください。",
+                    "contextLabelは短い英小文字スネークケース。keywordsは2-8個の短い日本語キーワード。",
+                    prompt,
+                  ].join("\n"),
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.2,
+          },
+        }),
+      },
+    );
 
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`Gemini API error: ${response.status} ${text}`);
+    if (!response.ok) {
+      const text = await response.text();
+      lastError = `Gemini API error (${model}): ${response.status} ${text}`;
+      if (
+        response.status === 404 ||
+        response.status === 429 ||
+        response.status === 503
+      ) {
+        continue;
+      }
+      throw new Error(lastError);
+    }
+
+    const data = (await response.json()) as {
+      candidates?: Array<{
+        content?: {
+          parts?: Array<{
+            text?: string;
+          }>;
+        };
+      }>;
+    };
+
+    const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!content) {
+      throw new Error("Gemini API から応答が取得できませんでした");
+    }
+
+    const parsed = JSON.parse(pickJsonText(content)) as Partial<AIResult>;
+
+    return sanitizeAIResult({
+      contextLabel: String(parsed.contextLabel || "general"),
+      keywords: Array.isArray(parsed.keywords)
+        ? parsed.keywords.map((item) => String(item))
+        : [],
+    });
   }
 
-  const data = (await response.json()) as {
-    candidates?: Array<{
-      content?: {
-        parts?: Array<{
-          text?: string;
-        }>;
-      };
-    }>;
-  };
-
-  const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!content) {
-    throw new Error("Gemini API から応答が取得できませんでした");
-  }
-
-  const parsed = JSON.parse(pickJsonText(content)) as Partial<AIResult>;
-
-  return sanitizeAIResult({
-    contextLabel: String(parsed.contextLabel || "general"),
-    keywords: Array.isArray(parsed.keywords)
-      ? parsed.keywords.map((item) => String(item))
-      : [],
-  });
+  throw new Error(lastError || "Gemini API error");
 }
 
 function resolveProvider(): AIProvider {
