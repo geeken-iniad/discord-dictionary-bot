@@ -26,16 +26,22 @@ export const calenderListCommand = async (
     await interaction.deferReply();
 
     const guildId = interaction.guildId || "global";
+    const now = new Date();
 
     const events = await prisma.calendarEvent.findMany({
-      where: { guildId },
+      where: {
+        guildId,
+        eventAt: {
+          gte: now,
+        },
+      },
       orderBy: { eventAt: "asc" },
       take: 50,
     });
 
     if (events.length === 0) {
       await interaction.editReply(
-        "📭 まだカレンダー予定は登録されていません。",
+        "📭 まだ未来のカレンダー予定は登録されていません。",
       );
       return;
     }

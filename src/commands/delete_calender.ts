@@ -51,18 +51,9 @@ function parseDateTimeInput(input: string, now: Date): Date | null {
   return candidate;
 }
 
-function formatEventDate(date: Date): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  const hour = String(date.getHours()).padStart(2, "0");
-  const minute = String(date.getMinutes()).padStart(2, "0");
-  return `${year}/${month}/${day} ${hour}:${minute}`;
-}
-
 export const data = new SlashCommandBuilder()
-  .setName("add_calender")
-  .setDescription("カレンダー予定を登録します")
+  .setName("delete_calender")
+  .setDescription("登録されたカレンダー予定を削除します")
   .addStringOption((option) =>
     option
       .setName("datetime")
@@ -73,7 +64,7 @@ export const data = new SlashCommandBuilder()
     option.setName("event").setDescription("イベント名").setRequired(true),
   );
 
-export const addCalenderCommand = async (
+export const deleteCalenderCommand = async (
   interaction: ChatInputCommandInteraction,
 ) => {
   try {
@@ -83,35 +74,34 @@ export const addCalenderCommand = async (
     const datetimeInput = interaction.options.getString("datetime", true);
     const eventName = interaction.options.getString("event", true).trim();
 
-    if (!eventName) {
-      await interaction.editReply("❌ イベント名を入力してください。");
-      return;
-    }
-
-    const now = new Date();
-    const eventAt = parseDateTimeInput(datetimeInput, now);
-
-    if (!eventAt) {
+    const targetAt = parseDateTimeInput(datetimeInput, new Date());
+    if (!targetAt) {
       await interaction.editReply(
-        "❌ 日時の形式が正しくありません。`YYYY/MM/DD HH:mm` または `MM/DD HH:mm` で入力してください。\n例: `2026/04/30 19:30` / `04/30 19:30`",
+        "❌ 日時の形式が正しくありません。`YYYY/MM/DD HH:mm` または `MM/DD HH:mm` で入力してください。",
       );
       return;
     }
 
-    await prisma.calendarEvent.create({
-      data: {
+    const deleted = await prisma.calendarEvent.deleteMany({
+      where: {
         guildId,
         eventName,
-        eventAt,
-        authorName: interaction.user.username,
+        eventAt: targetAt,
       },
     });
 
+    if (deleted.count === 0) {
+      await interaction.editReply(
+        "❌ 条件に一致する予定が見つかりませんでした。",
+      );
+      return;
+    }
+
     await interaction.editReply(
-      `✅ 予定を登録しました。\n**日時:** ${formatEventDate(eventAt)}\n**イベント:** ${eventName}`,
+      `✅ 予定を削除しました。\n**日時:** ${targetAt.getFullYear()}/${String(targetAt.getMonth() + 1).padStart(2, "0")}/${String(targetAt.getDate()).padStart(2, "0")} ${String(targetAt.getHours()).padStart(2, "0")}:${String(targetAt.getMinutes()).padStart(2, "0")}\n**イベント:** ${eventName}`,
     );
   } catch (error) {
-    console.error("Add Calender Error:", error);
-    await interaction.editReply("❌ 予定の登録中にエラーが発生しました。");
+    console.error("Delete Calender Error:", error);
+    await interaction.editReply("❌ 予定の削除中にエラーが発生しました。");
   }
 };

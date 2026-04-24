@@ -12,6 +12,7 @@ import { data as addWikiData } from "./commands/add_wiki";
 import { data as calenderListData } from "./commands/calender_list";
 import { contextDeleteData } from "./commands/context_delete";
 import { data as deleteData } from "./commands/delete";
+import { data as deleteCalenderData } from "./commands/delete_calender";
 import { data as escapeData } from "./commands/escape";
 import { data as introData } from "./commands/introduction";
 import { data as listData } from "./commands/list";
@@ -29,6 +30,7 @@ const commands = [
   addData.toJSON(),
   addCalenderData.toJSON(),
   calenderListData.toJSON(),
+  deleteCalenderData.toJSON(),
   addFromMeaningData.toJSON(),
   addFromWordData.toJSON(),
   contextDeleteData.toJSON(),

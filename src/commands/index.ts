@@ -5,6 +5,7 @@ export { addWikiCommand } from "./add_wiki";
 export { calenderListCommand } from "./calender_list";
 export { contextDeleteCommand } from "./context_delete";
 export { deleteCommand } from "./delete";
+export { deleteCalenderCommand } from "./delete_calender";
 export { escapeCommand } from "./escape";
 export { introductionCommand } from "./introduction";
 export { listCommand } from "./list";
