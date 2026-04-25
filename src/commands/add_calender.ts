@@ -71,6 +71,9 @@ export const data = new SlashCommandBuilder()
   )
   .addStringOption((option) =>
     option.setName("event").setDescription("イベント名").setRequired(true),
+  )
+  .addStringOption((option) =>
+    option.setName("location").setDescription("場所 (任意)").setRequired(false),
   );
 
 export const addCalenderCommand = async (
@@ -82,6 +85,8 @@ export const addCalenderCommand = async (
     const guildId = interaction.guildId || "global";
     const datetimeInput = interaction.options.getString("datetime", true);
     const eventName = interaction.options.getString("event", true).trim();
+    const location =
+      interaction.options.getString("location", false)?.trim() || null;
 
     if (!eventName) {
       await interaction.editReply("❌ イベント名を入力してください。");
@@ -103,12 +108,14 @@ export const addCalenderCommand = async (
         guildId,
         eventName,
         eventAt,
+        location,
         authorName: interaction.user.username,
       },
     });
 
+    const locationDisplay = location ? `\n**場所:** ${location}` : "";
     await interaction.editReply(
-      `✅ 予定を登録しました。\n**日時:** ${formatEventDate(eventAt)}\n**イベント:** ${eventName}`,
+      `✅ 予定を登録しました。\n**日時:** ${formatEventDate(eventAt)}\n**イベント:** ${eventName}${locationDisplay}`,
     );
   } catch (error) {
     console.error("Add Calender Error:", error);

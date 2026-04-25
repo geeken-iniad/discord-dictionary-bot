@@ -15,7 +15,11 @@ function formatEventDate(date: Date): string {
   return `${year}/${month}/${day} ${hour}:${minute}`;
 }
 
-function generateGoogleCalendarLink(eventName: string, eventAt: Date): string {
+function generateGoogleCalendarLink(
+  eventName: string,
+  eventAt: Date,
+  location?: string | null,
+): string {
   // イベント名をエンコード
   const encodedTitle = encodeURIComponent(eventName);
 
@@ -37,7 +41,15 @@ function generateGoogleCalendarLink(eventName: string, eventAt: Date): string {
   const endTimeStr = formatGoogleDate(endTime);
   const datesParam = `${startTime}/${endTimeStr}`;
 
-  return `https://calendar.google.com/calendar/r/eventedit?text=${encodedTitle}&dates=${datesParam}`;
+  let url = `https://calendar.google.com/calendar/r/eventedit?text=${encodedTitle}&dates=${datesParam}`;
+
+  // 場所がある場合は location パラメータを追加
+  if (location && location.trim()) {
+    const encodedLocation = encodeURIComponent(location);
+    url += `&location=${encodedLocation}`;
+  }
+
+  return url;
 }
 
 export const data = new SlashCommandBuilder()
@@ -80,13 +92,17 @@ export const calenderListCommand = async (
           const googleCalendarLink = generateGoogleCalendarLink(
             event.eventName,
             event.eventAt,
+            event.location,
           );
           const authorInfo = event.authorName
             ? `登録者: ${event.authorName}`
             : "登録者: 不明";
+          const locationInfo = event.location
+            ? `\n場所: ${event.location}`
+            : "";
           return {
             name: `${formatEventDate(event.eventAt)} | ${event.eventName}`,
-            value: `${authorInfo}\n[🔗 Google カレンダーに追加](${googleCalendarLink})`,
+            value: `${authorInfo}${locationInfo}\n[🔗 Google カレンダーに追加](${googleCalendarLink})`,
             inline: false,
           };
         }),
