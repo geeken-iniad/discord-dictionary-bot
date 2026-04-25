@@ -61,7 +61,7 @@ function formatEventDate(date: Date): string {
 }
 
 export const data = new SlashCommandBuilder()
-  .setName("add_calender")
+  .setName("add-calender")
   .setDescription("カレンダー予定を登録します")
   .addStringOption((option) =>
     option

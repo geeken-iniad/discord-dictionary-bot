@@ -35,7 +35,7 @@ function extractAliases(text: string, maxAliases: number = 3): string[] {
 }
 
 export const data = new SlashCommandBuilder()
-  .setName("add_wiki")
+  .setName("add-wiki")
   .setDescription("Wikipediaから単語の意味を検索し、辞書に自動登録します")
   .addStringOption((option) =>
     option

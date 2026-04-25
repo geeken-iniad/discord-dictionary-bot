@@ -52,7 +52,7 @@ function parseDateTimeInput(input: string, now: Date): Date | null {
 }
 
 export const data = new SlashCommandBuilder()
-  .setName("delete_calender")
+  .setName("delete-calender")
   .setDescription("登録されたカレンダー予定を削除します")
   .addStringOption((option) =>
     option
