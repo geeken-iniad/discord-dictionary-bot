@@ -74,11 +74,32 @@ export const data = new SlashCommandBuilder()
   )
   .addStringOption((option) =>
     option.setName("location").setDescription("場所 (任意)").setRequired(false),
+  )
+  .addStringOption((option) =>
+    option
+      .setName("details")
+      .setDescription("イベント詳細 (任意)")
+      .setRequired(false),
+  )
+  .addStringOption((option) =>
+    option
+      .setName("url")
+      .setDescription("関連URL (任意、http/https のみ)")
+      .setRequired(false),
   );
 
 export const addCalenderCommand = async (
   interaction: ChatInputCommandInteraction,
 ) => {
+  const isValidHttpUrl = (input: string): boolean => {
+    try {
+      const parsed = new URL(input);
+      return parsed.protocol === "http:" || parsed.protocol === "https:";
+    } catch {
+      return false;
+    }
+  };
+
   try {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -87,9 +108,18 @@ export const addCalenderCommand = async (
     const eventName = interaction.options.getString("event", true).trim();
     const location =
       interaction.options.getString("location", false)?.trim() || null;
+    const eventDetails =
+      interaction.options.getString("details", false)?.trim() || null;
+    const eventUrl =
+      interaction.options.getString("url", false)?.trim() || null;
 
     if (!eventName) {
       await interaction.editReply("❌ イベント名を入力してください。");
+      return;
+    }
+
+    if (eventUrl && !isValidHttpUrl(eventUrl)) {
+      await interaction.editReply("❌ URL は http/https のみ入力できます。");
       return;
     }
 
@@ -109,13 +139,17 @@ export const addCalenderCommand = async (
         eventName,
         eventAt,
         location,
+        eventDetails,
+        eventUrl,
         authorName: interaction.user.username,
       },
     });
 
     const locationDisplay = location ? `\n**場所:** ${location}` : "";
+    const detailsDisplay = eventDetails ? `\n**詳細:** ${eventDetails}` : "";
+    const urlDisplay = eventUrl ? `\n**URL:** ${eventUrl}` : "";
     await interaction.editReply(
-      `✅ 予定を登録しました。\n**日時:** ${formatEventDate(eventAt)}\n**イベント:** ${eventName}${locationDisplay}`,
+      `✅ 予定を登録しました。\n**日時:** ${formatEventDate(eventAt)}\n**イベント:** ${eventName}${locationDisplay}${detailsDisplay}${urlDisplay}`,
     );
   } catch (error) {
     console.error("Add Calender Error:", error);

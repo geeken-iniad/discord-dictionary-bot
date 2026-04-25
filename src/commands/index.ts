@@ -13,4 +13,5 @@ export { quizCommand } from "./quiz";
 export { requestCommand } from "./request";
 export { searchCommand } from "./search";
 export { updateCommand } from "./update";
+export { updateCalenderCommand } from "./update_calender";
 export { wikiQuizCommand } from "./wiki_quiz";

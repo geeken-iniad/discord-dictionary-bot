@@ -53,6 +53,8 @@ model CalendarEvent {
   eventName  String
   eventAt    DateTime
   location   String?
+  eventDetails String?
+  eventUrl   String?
   authorName String?
   createdAt  DateTime @default(now())
   updatedAt  DateTime @default(now()) @updatedAt

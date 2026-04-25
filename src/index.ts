@@ -33,13 +33,14 @@ const client = new Client({
 client.once(Events.ClientReady, (c) => {
   console.log(`準備OK！ ${c.user.tag} が起動しました。`);
   console.log(
-    `コマンド同期完了: /add, /add-calender, /calender-list, /delete-calender, /add-wiki, /quiz, /wiki-quiz, /escape, /list, /delete, /update, /search, /introduction, /request, context-delete が使えます`,
+    `コマンド同期完了: /add, /add-calender, /update-calender, /calender-list, /delete-calender, /add-wiki, /quiz, /wiki-quiz, /escape, /list, /delete, /update, /search, /introduction, /request, context-delete が使えます`,
   );
 });
 
 const commandMap: { [key: string]: (interaction: any) => Promise<void> } = {
   add: commands.addCommand,
   "add-calender": commands.addCalenderCommand,
+  "update-calender": commands.updateCalenderCommand,
   "add-wiki": commands.addWikiCommand,
   "calender-list": commands.calenderListCommand,
   "delete-calender": commands.deleteCalenderCommand,

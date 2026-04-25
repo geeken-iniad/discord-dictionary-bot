@@ -6,6 +6,11 @@ import {
 } from "discord.js";
 import { prisma } from "../prismaClient";
 
+function truncateText(text: string, maxLength: number): string {
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 1)}…`;
+}
+
 function formatEventDate(date: Date): string {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, "0");
@@ -19,6 +24,8 @@ function generateGoogleCalendarLink(
   eventName: string,
   eventAt: Date,
   location?: string | null,
+  eventDetails?: string | null,
+  eventUrl?: string | null,
 ): string {
   // イベント名をエンコード
   const encodedTitle = encodeURIComponent(eventName);
@@ -47,6 +54,15 @@ function generateGoogleCalendarLink(
   if (location && location.trim()) {
     const encodedLocation = encodeURIComponent(location);
     url += `&location=${encodedLocation}`;
+  }
+
+  const detailsParts = [eventDetails?.trim(), eventUrl?.trim()].filter(
+    (value): value is string => Boolean(value),
+  );
+
+  if (detailsParts.length > 0) {
+    const encodedDetails = encodeURIComponent(detailsParts.join("\n\n"));
+    url += `&details=${encodedDetails}`;
   }
 
   return url;
@@ -86,23 +102,37 @@ export const calenderListCommand = async (
     const embed = new EmbedBuilder()
       .setColor(Colors.Blue)
       .setTitle("📅 カレンダー予定一覧")
-      .setDescription("日付順に表示しています。")
+      .setDescription(
+        "各予定の Google カレンダーリンクをそのまま開けます。\n場所・詳細・URL もまとめて確認できます。",
+      )
       .addFields(
         events.map((event) => {
           const googleCalendarLink = generateGoogleCalendarLink(
             event.eventName,
             event.eventAt,
             event.location,
+            event.eventDetails,
+            event.eventUrl,
           );
-          const authorInfo = event.authorName
-            ? `登録者: ${event.authorName}`
-            : "登録者: 不明";
+          const authorName = event.authorName || "不明";
           const locationInfo = event.location
-            ? `\n場所: ${event.location}`
-            : "";
+            ? `📍 **場所:** ${event.location}`
+            : "📍 **場所:** なし";
+          const detailsInfo = event.eventDetails
+            ? `📝 **詳細:** ${truncateText(event.eventDetails, 120)}`
+            : "📝 **詳細:** なし";
+          const urlInfo = event.eventUrl
+            ? `🔗 **URL:** [開く](${event.eventUrl})`
+            : "🔗 **URL:** なし";
           return {
-            name: `${formatEventDate(event.eventAt)} | ${event.eventName}`,
-            value: `${authorInfo}${locationInfo}\n[🔗 Google カレンダーに追加](${googleCalendarLink})`,
+            name: `📌 ${formatEventDate(event.eventAt)} | ${event.eventName}`,
+            value: [
+              `🗓️ **Google Calendar:** [この予定を開く](${googleCalendarLink})`,
+              `👤 **登録者:** ${authorName}`,
+              locationInfo,
+              detailsInfo,
+              urlInfo,
+            ].join("\n"),
             inline: false,
           };
         }),

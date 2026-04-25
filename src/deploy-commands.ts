@@ -20,6 +20,7 @@ import { data as quizData } from "./commands/quiz";
 import { data as requestData } from "./commands/request";
 import { data as searchData } from "./commands/search";
 import { data as updateData } from "./commands/update";
+import { data as updateCalenderData } from "./commands/update_calender";
 import { data as wikiQuizData } from "./commands/wiki_quiz";
 
 dotenv.config();
@@ -29,6 +30,7 @@ const commands = [
   listData.toJSON(),
   addData.toJSON(),
   addCalenderData.toJSON(),
+  updateCalenderData.toJSON(),
   calenderListData.toJSON(),
   deleteCalenderData.toJSON(),
   addFromMeaningData.toJSON(),
