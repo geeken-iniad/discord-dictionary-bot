@@ -11,8 +11,6 @@ type AIResult = {
   keywords: string[];
 };
 
-type AIProvider = "openai" | "gemini";
-
 function parseArgs() {
   const args = process.argv.slice(2);
   const hasApply = args.includes("--apply");
@@ -26,7 +24,24 @@ function parseArgs() {
 
   const includeCompleted = args.includes("--all");
 
-  return { mode, limit, includeCompleted };
+  const batchSizeIndex = args.findIndex((arg) => arg === "--batch-size");
+  const batchSizeRaw =
+    batchSizeIndex >= 0 ? args[batchSizeIndex + 1] : undefined;
+  const parsedBatchSize = batchSizeRaw ? Number(batchSizeRaw) : 10;
+  const batchSize =
+    Number.isInteger(parsedBatchSize) && parsedBatchSize > 0
+      ? Math.min(parsedBatchSize, 20)
+      : 10;
+
+  return { mode, limit, includeCompleted, batchSize };
+}
+
+function chunkArray<T>(values: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+  for (let i = 0; i < values.length; i += size) {
+    chunks.push(values.slice(i, i + size));
+  }
+  return chunks;
 }
 
 function normalizeKeyword(value: string): string {
@@ -70,209 +85,80 @@ function pickJsonText(raw: string): string {
   return raw;
 }
 
-async function callOpenAI(prompt: string): Promise<AIResult> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("OPENAI_API_KEY が未設定です");
-  }
-
-  const baseUrl = process.env.OPENAI_BASE_URL || "https://api.openai.com/v1";
-  const model = process.env.OPENAI_MODEL || "gpt-4o-mini";
-
-  const response = await fetch(`${baseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      temperature: 0.2,
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content:
-            "あなたは辞書Botの文脈分類器です。必ずJSONで返してください。contextLabelは短い英小文字スネークケース。keywordsは2-8個の短い日本語キーワード。",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-    }),
-  });
-
-  if (!response.ok) {
-    const text = await response.text();
-    throw new Error(`OpenAI API error: ${response.status} ${text}`);
-  }
-
-  const data = (await response.json()) as {
-    choices?: Array<{
-      message?: {
-        content?: string;
-      };
-    }>;
-  };
-
-  const content = data.choices?.[0]?.message?.content;
-  if (!content) {
-    throw new Error("OpenAI API から応答が取得できませんでした");
-  }
-
-  const parsed = JSON.parse(pickJsonText(content)) as Partial<AIResult>;
-
-  return sanitizeAIResult({
-    contextLabel: String(parsed.contextLabel || "general"),
-    keywords: Array.isArray(parsed.keywords)
-      ? parsed.keywords.map((item) => String(item))
-      : [],
-  });
-}
-
-async function callGemini(prompt: string): Promise<AIResult> {
-  const apiKey = process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("GEMINI_API_KEY または OPENAI_API_KEY が未設定です");
-  }
-
-  const models = [
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-2.5-flash-lite",
-    "gemini-2.0-flash-lite",
-    process.env.GEMINI_MODEL,
-    "gemini-1.5-flash",
-  ].filter((value): value is string => Boolean(value));
-  const baseUrl =
-    process.env.GEMINI_BASE_URL ||
-    "https://generativelanguage.googleapis.com/v1";
-
-  let lastError: string | null = null;
-
-  for (const model of models) {
-    const response = await fetch(
-      `${baseUrl}/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: [
-                    "あなたは辞書Botの文脈分類器です。必ずJSONで返してください。",
-                    "contextLabelは短い英小文字スネークケース。keywordsは2-8個の短い日本語キーワード。",
-                    prompt,
-                  ].join("\n"),
-                },
-              ],
-            },
-          ],
-          generationConfig: {
-            temperature: 0.2,
-          },
-        }),
-      },
-    );
-
-    if (!response.ok) {
-      const text = await response.text();
-      lastError = `Gemini API error (${model}): ${response.status} ${text}`;
-      if (
-        response.status === 404 ||
-        response.status === 429 ||
-        response.status === 503
-      ) {
-        continue;
-      }
-      throw new Error(lastError);
-    }
-
-    const data = (await response.json()) as {
-      candidates?: Array<{
-        content?: {
-          parts?: Array<{
-            text?: string;
-          }>;
-        };
-      }>;
-    };
-
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (!content) {
-      throw new Error("Gemini API から応答が取得できませんでした");
-    }
-
-    const parsed = JSON.parse(pickJsonText(content)) as Partial<AIResult>;
-
-    return sanitizeAIResult({
-      contextLabel: String(parsed.contextLabel || "general"),
-      keywords: Array.isArray(parsed.keywords)
-        ? parsed.keywords.map((item) => String(item))
-        : [],
-    });
-  }
-
-  throw new Error(lastError || "Gemini API error");
-}
-
-function resolveProvider(): AIProvider {
-  const rawProvider = (process.env.AI_PROVIDER || "auto").toLowerCase();
-  if (rawProvider === "openai" || rawProvider === "gemini") {
-    return rawProvider;
-  }
-
-  const geminiKey =
-    process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || "";
-  if (geminiKey.startsWith("AIza")) {
-    return "gemini";
-  }
-
-  return "openai";
-}
-
-async function callAI(prompt: string): Promise<AIResult> {
-  const provider = resolveProvider();
-  if (provider === "gemini") {
-    return callGemini(prompt);
-  }
-
-  return callOpenAI(prompt);
-}
-
-function buildPrompt(input: {
+function buildLocalResult(input: {
   titles: string[];
   meaning: string;
   tag: string | null;
   existingContextLabel: string | null;
-  existingKeywords: string | null;
-}) {
-  const titleText = input.titles.join(" / ");
-  return [
-    "次の辞書データに対して、文脈分類ラベルとキーワードを提案してください。",
-    '出力はJSONのみ。形式: {"contextLabel":"...","keywords":["..."]}',
-    "contextLabelは英小文字スネークケースで1語相当。",
-    "keywordsは日本語中心で2-8個、短く具体的に。",
-    "汎用語(もの/こと/それ など)は避ける。",
-    `title: ${titleText}`,
-    `meaning: ${input.meaning}`,
-    `tag: ${input.tag || ""}`,
-    `existing contextLabel: ${input.existingContextLabel || ""}`,
-    `existing keywords: ${input.existingKeywords || ""}`,
-  ].join("\n");
+}): AIResult {
+  const source = [input.titles.join(" "), input.meaning, input.tag || ""].join(
+    " ",
+  );
+
+  const stopwords = new Set([
+    "です",
+    "ます",
+    "する",
+    "した",
+    "して",
+    "ある",
+    "いる",
+    "こと",
+    "もの",
+    "それ",
+    "ため",
+    "よう",
+    "and",
+    "the",
+    "for",
+    "with",
+    "from",
+    "this",
+    "that",
+  ]);
+
+  const matched =
+    source.match(
+      /[A-Za-z][A-Za-z0-9+_.-]{1,}|[\u3040-\u30ff\u4e00-\u9fff]{2,}/g,
+    ) || [];
+  const unique = new Set<string>();
+
+  for (const token of matched) {
+    const normalized = normalizeKeyword(token);
+    if (!normalized) continue;
+    if (normalized.length < 2) continue;
+    if (stopwords.has(normalized)) continue;
+    unique.add(normalized);
+    if (unique.size >= 8) break;
+  }
+
+  if (unique.size === 0) {
+    const titleFallback = normalizeKeyword(input.titles.join(" "));
+    if (titleFallback && titleFallback.length >= 2) {
+      unique.add(titleFallback);
+    }
+  }
+
+  if (unique.size === 0) {
+    unique.add("用語");
+  }
+
+  const existing = normalizeContextLabel(input.existingContextLabel || "");
+  const byTag = normalizeContextLabel(input.tag || "");
+  const firstKeyword = Array.from(unique)[0] || "";
+
+  return sanitizeAIResult({
+    contextLabel:
+      existing || byTag || normalizeContextLabel(firstKeyword) || "general",
+    keywords: Array.from(unique),
+  });
 }
 
 async function main() {
-  const { mode, limit, includeCompleted } = parseArgs();
-  const provider = resolveProvider();
+  const { mode, limit, includeCompleted, batchSize } = parseArgs();
 
   console.log(
-    `mode=${mode}, limit=${limit}, includeCompleted=${includeCompleted}, provider=${provider}`,
+    `mode=${mode}, limit=${limit}, includeCompleted=${includeCompleted}, batchSize=${batchSize}, localOnly=true`,
   );
 
   const whereClause: Prisma.WordWhereInput | undefined = includeCompleted
@@ -301,42 +187,43 @@ async function main() {
   let success = 0;
   let failed = 0;
 
-  for (const word of targets) {
-    const prompt = buildPrompt({
-      titles: word.titles.map((t: { text: string }) => t.text),
-      meaning: word.meaning,
-      tag: word.tag,
-      existingContextLabel: word.contextLabel,
-      existingKeywords: word.contextKeywords,
-    });
+  const chunks = chunkArray(targets, batchSize);
 
-    try {
-      const aiResult = await callAI(prompt);
-      const joinedKeywords = aiResult.keywords.join(",");
-
-      if (mode === "apply") {
-        await prisma.word.update({
-          where: { id: word.id },
-          data: {
-            contextLabel: aiResult.contextLabel,
-            contextKeywords: joinedKeywords || null,
-          },
+  for (const chunk of chunks) {
+    for (const word of chunk) {
+      try {
+        const aiResult = buildLocalResult({
+          titles: word.titles.map((t: { text: string }) => t.text),
+          meaning: word.meaning,
+          tag: word.tag,
+          existingContextLabel: word.contextLabel,
         });
-      }
+        const joinedKeywords = aiResult.keywords.join(",");
 
-      console.log(
-        `[OK] id=${word.id} title=${word.titles.map((t: { text: string }) => t.text).join("/")} context=${aiResult.contextLabel} keywords=${joinedKeywords}`,
-      );
-      success++;
-    } catch (error) {
-      console.error(
-        `[NG] id=${word.id} title=${word.titles.map((t: { text: string }) => t.text).join("/")}`,
-        error,
-      );
-      failed++;
+        if (mode === "apply") {
+          await prisma.word.update({
+            where: { id: word.id },
+            data: {
+              contextLabel: aiResult.contextLabel,
+              contextKeywords: joinedKeywords || null,
+            },
+          });
+        }
+
+        console.log(
+          `[OK] id=${word.id} title=${word.titles.map((t: { text: string }) => t.text).join("/")} context=${aiResult.contextLabel} keywords=${joinedKeywords}`,
+        );
+        success++;
+      } catch (error) {
+        console.error(
+          `[NG] id=${word.id} title=${word.titles.map((t: { text: string }) => t.text).join("/")}`,
+          error,
+        );
+        failed++;
+      }
     }
 
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await new Promise((resolve) => setTimeout(resolve, 80));
   }
 
   console.log(`完了: success=${success}, failed=${failed}`);
