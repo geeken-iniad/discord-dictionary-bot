@@ -2,6 +2,7 @@ import {
   ChatInputCommandInteraction,
   Colors,
   EmbedBuilder,
+  MessageFlags,
   SlashCommandBuilder,
 } from "discord.js";
 import { prisma } from "../prismaClient";
@@ -76,7 +77,7 @@ export const calenderListCommand = async (
   interaction: ChatInputCommandInteraction,
 ) => {
   try {
-    await interaction.deferReply();
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const guildId = interaction.guildId || "global";
     const now = new Date();
