@@ -44,6 +44,7 @@ model WikiWord {
   term      String   @unique
   meaning   String
   link      String
+  processed Boolean  @default(false) // 👈 説明文クリーニング処理完了フラグ
   updatedAt DateTime @updatedAt
 }
 
