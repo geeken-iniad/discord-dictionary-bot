@@ -4,6 +4,7 @@ import {
   ButtonStyle,
   Message,
 } from "discord.js";
+import kuromoji from "kuromoji";
 import { prisma } from "../prismaClient";
 import {
   calculateContextScore,
@@ -15,6 +16,50 @@ import { isQuizChannelActive } from "../utils/quizState";
 // ⏱️ タイマー用のメモ帳
 const replyCooldowns = new Map<string, number>();
 const COOLDOWN_TIME = 24 * 60 * 60 * 1000; // 24時間
+
+// 形態素解析用のトークナイザー（グローバルで初期化、再利用）
+let tokenizer: any = null;
+let initPromise: Promise<any> | null = null;
+
+async function initTokenizer() {
+  if (tokenizer) return tokenizer;
+  if (!initPromise) {
+    initPromise = new Promise((resolve, reject) => {
+      kuromoji
+        .builder({
+          dicPath: "node_modules/kuromoji/dict",
+        })
+        .build((err: any, tok: any) => {
+          if (err) {
+            reject(err);
+          } else {
+            tokenizer = tok;
+            console.log("✅ 形態素解析エンジンを初期化しました");
+            resolve(tok);
+          }
+        });
+    });
+  }
+  return initPromise;
+}
+
+// 形態素解析で名詞＆動詞のベース形を抽出
+async function extractMorphemes(text: string): Promise<string[]> {
+  try {
+    const tok = await initTokenizer();
+    const tokens = tok.tokenize(text);
+    const nouns = tokens
+      .filter((token: any) => {
+        const pos = token.pos[0];
+        return pos === "名詞" || pos === "動詞";
+      })
+      .map((token: any) => token.basic_form || token.surface_form);
+    return nouns;
+  } catch (error) {
+    console.error("形態素解析エラー:", error);
+    return [];
+  }
+}
 
 // 正規化関数
 function normalize(str: string): string {
@@ -61,19 +106,20 @@ function getWordCooldownKeys(
   return Array.from(keys);
 }
 
-// Wiki辞書から単語を検索する関数
+// Wiki辞書から単語を検索する関数（形態素解析ベース）
 async function findWikiMatches(
-  normalizedContent: string,
+  contentWithoutUrl: string,
   allWikiWords: { id: number; term: string; meaning: string; link: string }[],
 ): Promise<typeof allWikiWords> {
   const matches: typeof allWikiWords = [];
 
+  // 形態素解析で名詞を抽出
+  const morphemes = await extractMorphemes(contentWithoutUrl);
+  const normalizedMorphemes = new Set(morphemes.map((m) => normalize(m)));
+
   for (const wikiWord of allWikiWords) {
     const targetWord = normalize(wikiWord.term);
-    const escapedWord = escapeRegExp(targetWord);
-    const regex = new RegExp(`(?<![a-z0-9_])${escapedWord}(?![a-z0-9_])`);
-
-    if (regex.test(normalizedContent)) {
+    if (normalizedMorphemes.has(targetWord)) {
       matches.push(wikiWord);
     }
   }
@@ -123,6 +169,10 @@ export const handleMessage = async (message: Message) => {
     if (!contentWithoutUrl.trim()) return;
     const normalizedContent = normalize(contentWithoutUrl);
 
+    // 👇 【新規】形態素解析で名詞＆動詞のベース形を抽出
+    const morphemes = await extractMorphemes(contentWithoutUrl);
+    const normalizedMorphemes = new Set(morphemes.map((m) => normalize(m)));
+
     // 👇 【追加】今いるサーバーのIDを取得！
     const guildId = message.guildId!;
 
@@ -141,16 +191,11 @@ export const handleMessage = async (message: Message) => {
       },
     });
 
-    // 3. マッチング
+    // 3. マッチング（形態素解析ベース）
     const hitTitles = allTitles.filter((t) => {
       const targetWord = normalize(t.text);
-      const escapedWord = escapeRegExp(targetWord);
-
-      // (?<![a-z0-9_]) = 直前に英数字がない
-      // (?![a-z0-9_])  = 直後に英数字がない
-      const regex = new RegExp(`(?<![a-z0-9_])${escapedWord}(?![a-z0-9_])`);
-
-      return regex.test(normalizedContent);
+      // 形態素の中に辞書語が含まれているか確認
+      return normalizedMorphemes.has(targetWord);
     });
 
     // 重複除去して「ヒットしたWord」の配列(hits)を作る
@@ -216,7 +261,7 @@ export const handleMessage = async (message: Message) => {
 
       // Embed作成用に、Wiki辞書のマッチを見つける
       const wikiMatches = await findWikiMatches(
-        normalizedContent,
+        contentWithoutUrl,
         allWikiWords,
       );
 
