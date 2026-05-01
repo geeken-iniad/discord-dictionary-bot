@@ -173,6 +173,20 @@ export const handleMessage = async (message: Message) => {
     const morphemes = await extractMorphemes(contentWithoutUrl);
     const normalizedMorphemes = new Set(morphemes.map((m) => normalize(m)));
 
+    // デバッグログ: 受信内容と形態素の確認
+    try {
+      console.log("[AutoResponse] message received:", {
+        guildId: message.guildId,
+        channelId: message.channelId,
+        author: message.author.tag,
+        content: contentWithoutUrl,
+        normalizedContent,
+        morphemes: morphemes.slice(0, 20),
+      });
+    } catch (e) {
+      console.error("[AutoResponse] debug log failed", e);
+    }
+
     // 👇 【追加】今いるサーバーのIDを取得！
     const guildId = message.guildId!;
 
@@ -197,6 +211,17 @@ export const handleMessage = async (message: Message) => {
       // 形態素の中に辞書語が含まれているか確認
       return normalizedMorphemes.has(targetWord);
     });
+
+    // デバッグログ: マッチ状況
+    try {
+      console.log("[AutoResponse] matching stats:", {
+        totalTitles: allTitles.length,
+        hitCount: hitTitles.length,
+        sampleHits: hitTitles.slice(0, 10).map((h) => h.text),
+      });
+    } catch (e) {
+      console.error("[AutoResponse] matching debug failed", e);
+    }
 
     // 重複除去して「ヒットしたWord」の配列(hits)を作る
     const uniqueWords = new Map();
