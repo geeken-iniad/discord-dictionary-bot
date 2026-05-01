@@ -53,7 +53,13 @@ async function extractMorphemes(text: string): Promise<string[]> {
         const pos = token.pos[0];
         return pos === "名詞" || pos === "動詞";
       })
-      .map((token: any) => token.basic_form || token.surface_form);
+      .map((token: any) => {
+        if (token.basic_form && token.basic_form !== "*") {
+          return token.basic_form;
+        }
+
+        return token.surface_form;
+      });
     return nouns;
   } catch (error) {
     console.error("形態素解析エラー:", error);
