@@ -50,7 +50,7 @@ async function extractMorphemes(text: string): Promise<string[]> {
     const tokens = tok.tokenize(text);
     const nouns = tokens
       .filter((token: any) => {
-        const pos = token.pos[0];
+        const pos = typeof token.pos === "string" ? token.pos : token.pos?.[0];
         return pos === "名詞" || pos === "動詞";
       })
       .map((token: any) => {
