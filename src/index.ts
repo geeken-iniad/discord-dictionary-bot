@@ -258,6 +258,23 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
           return;
         }
 
+        // DB内に同じ単語が存在するか確認
+        const existingTitles = await prisma.title.findMany({
+          where: {
+            text: { in: titles },
+            word: { guildId: guildId },
+          },
+        });
+
+        if (existingTitles.length > 0) {
+          const duplicateTexts = existingTitles.map((t) => t.text).join(" / ");
+          await interaction.reply({
+            content: `❌ **「${duplicateTexts}」** はすでに登録されています。`,
+            flags: MessageFlags.Ephemeral,
+          });
+          return;
+        }
+
         const contextInput =
           interaction.fields.getTextInputValue("contextInput") || null;
         const keywordsInput =

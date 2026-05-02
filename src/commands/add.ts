@@ -111,6 +111,22 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
         return;
       }
 
+      // DB内に同じ単語が存在するか確認
+      const existingTitles = await prisma.title.findMany({
+        where: {
+          text: { in: titles },
+          word: { guildId: guildId },
+        },
+      });
+
+      if (existingTitles.length > 0) {
+        const duplicateTexts = existingTitles.map((t) => t.text).join("、");
+        await interaction.editReply(
+          `❌ **「${duplicateTexts}」** はすでに登録されています。`,
+        );
+        return;
+      }
+
       await prisma.word.create({
         data: {
           guildId: guildId, // 👈 【追加】サーバー名札をつける！
@@ -176,6 +192,20 @@ export const addCommand = async (interaction: ChatInputCommandInteraction) => {
 
       if (duplicateTitle) {
         failedWords.push(`${titlePart} (入力内で重複: ${duplicateTitle})`);
+        continue;
+      }
+
+      // DB内に同じ単語が存在するか確認
+      const existingTitles = await prisma.title.findMany({
+        where: {
+          text: { in: titles },
+          word: { guildId: guildId },
+        },
+      });
+
+      if (existingTitles.length > 0) {
+        const duplicateTexts = existingTitles.map((t) => t.text).join("/");
+        failedWords.push(`${titlePart} (既に登録済み: ${duplicateTexts})`);
         continue;
       }
 
