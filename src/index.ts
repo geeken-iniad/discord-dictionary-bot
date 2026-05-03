@@ -18,6 +18,7 @@ import {
 } from "./utils/mentionGuard";
 
 import * as commands from "./commands";
+import { normalizeTitleForComparison } from "./commands/add";
 import { handleMessage } from "./events/messageHandler";
 
 dotenv.config();
@@ -279,13 +280,24 @@ client.on(Events.InteractionCreate, async (interaction: Interaction) => {
         // DB内に同じ単語が存在するか確認
         const existingTitles = await prisma.title.findMany({
           where: {
-            text: { in: titles },
             word: { guildId: guildId },
           },
         });
 
-        if (existingTitles.length > 0) {
-          const duplicateTexts = existingTitles.map((t) => t.text).join(" / ");
+        // 正規化した入力タイトルで検索
+        const normalizedInputTitles = new Set(
+          titles.map(normalizeTitleForComparison),
+        );
+
+        const duplicateMatches = existingTitles.filter((title) => {
+          const normalizedDbTitle = normalizeTitleForComparison(title.text);
+          return normalizedInputTitles.has(normalizedDbTitle);
+        });
+
+        if (duplicateMatches.length > 0) {
+          const duplicateTexts = duplicateMatches
+            .map((t) => t.text)
+            .join(" / ");
           await interaction.reply({
             content: `❌ **「${duplicateTexts}」** はすでに登録されています。`,
             flags: MessageFlags.Ephemeral,

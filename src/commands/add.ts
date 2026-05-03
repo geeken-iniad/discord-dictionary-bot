@@ -60,6 +60,11 @@ function makeDuplicateToken(): string {
   return `${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
+// 大文字小文字を区別しない重複判定用の正規化
+export function normalizeTitleForComparison(text: string): string {
+  return text.toLowerCase().trim();
+}
+
 function buildCreateWordData(params: {
   guildId: string;
   titles: string[];
@@ -92,7 +97,6 @@ async function findExistingWords(
 ): Promise<ExistingWordSummary[]> {
   const existingTitles = await prisma.title.findMany({
     where: {
-      text: { in: titles },
       word: { guildId },
     },
     include: {
@@ -102,8 +106,19 @@ async function findExistingWords(
     },
   });
 
+  // 正規化した入力タイトルを作成
+  const normalizedInputTitles = new Set(
+    titles.map(normalizeTitleForComparison),
+  );
+
+  // DB から取得した結果を、正規化して照合
   const wordMap = new Map<number, ExistingWordSummary>();
   existingTitles.forEach((title) => {
+    const normalizedDbTitle = normalizeTitleForComparison(title.text);
+    if (!normalizedInputTitles.has(normalizedDbTitle)) {
+      return;
+    }
+
     const word = title.word;
     if (!wordMap.has(word.id)) {
       wordMap.set(word.id, {
