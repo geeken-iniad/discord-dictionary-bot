@@ -1,5 +1,9 @@
 // コマンドの「実行関数」だけを名指しでエクスポートする
-export { addCommand, contextAddCommand } from "./add";
+export {
+  addCommand,
+  contextAddCommand,
+  handleDuplicateRegistrationButton,
+} from "./add";
 export { addCalenderCommand } from "./add_calender";
 export { addWikiCommand } from "./add_wiki";
 export { calenderListCommand } from "./calender_list";

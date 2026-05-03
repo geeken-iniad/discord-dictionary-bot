@@ -62,6 +62,24 @@ client.on(Events.MessageCreate, async (message) => {
 client.on(Events.InteractionCreate, async (interaction: Interaction) => {
   if (interaction.isButton()) {
     if (
+      interaction.customId.startsWith("adddup_confirm_") ||
+      interaction.customId.startsWith("adddup_cancel_")
+    ) {
+      try {
+        await commands.handleDuplicateRegistrationButton(interaction);
+      } catch (error) {
+        console.error("Add Duplicate Button Error", error);
+        if (!interaction.replied && !interaction.deferred) {
+          await interaction.reply({
+            content: "❌ 確認処理中にエラーが発生しました。",
+            flags: MessageFlags.Ephemeral,
+          });
+        }
+      }
+      return;
+    }
+
+    if (
       interaction.customId.startsWith("dict_word_") ||
       interaction.customId.startsWith("dict_wiki_")
     ) {
