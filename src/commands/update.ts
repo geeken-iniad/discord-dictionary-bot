@@ -72,7 +72,10 @@ async function handleWordUpdate(interaction: ChatInputCommandInteraction) {
 
   const matchingTitles = await prisma.title.findMany({
     where: {
-      text: wordText,
+      text: {
+        equals: wordText,
+        mode: "insensitive",
+      },
       word: {
         guildId: guildId, // 👈 【修正】このサーバーの単語だけを探す！
       },
