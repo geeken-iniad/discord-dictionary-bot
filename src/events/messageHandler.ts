@@ -368,7 +368,7 @@ export const handleMessage = async (message: Message) => {
 
     await message.reply({
       content:
-        "📚 関連ワードを検知しました。**解説を見る**ボタンを押すと、押した人にだけ表示されます。",
+        "解説を見る",
       components: wordGuideButtons,
       allowedMentions: { parse: [] },
     });
