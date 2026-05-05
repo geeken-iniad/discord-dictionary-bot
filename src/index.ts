@@ -103,17 +103,13 @@ client.on(Events.MessageReactionAdd, async (reaction, user) => {
       rows.push(row);
     }
 
-    // ユーザーにのみ見える形でDM送信
-    await user.send({
-      content: `解説を選んでください：`,
+    // チャンネル内に返信形式でボタン送信
+    await reaction.message.reply({
+      content: `<@${user.id}> 解説を選んでください：`,
       components: rows,
-    }).catch(async () => {
-      // DM送信失敗時はリプライで対応
-      await reaction.message.reply({
-        content: `<@${user.id}> DM送信失敗。チャンネルに表示します：`,
-        components: rows,
-        allowedMentions: { parse: [] },
-      });
+      allowedMentions: { parse: [] },
+    }).catch((error) => {
+      console.error("MessageReactionAdd reply failed:", error);
     });
   } catch (error) {
     console.error("MessageReactionAdd Error:", error);
