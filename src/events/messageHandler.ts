@@ -1,9 +1,4 @@
-import {
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  Message,
-} from "discord.js";
+import { Message } from "discord.js";
 import kuromoji from "kuromoji";
 import { prisma } from "../prismaClient";
 import {
@@ -16,6 +11,15 @@ import { isQuizChannelActive } from "../utils/quizState";
 // ⏱️ タイマー用のメモ帳
 const replyCooldowns = new Map<string, number>();
 const COOLDOWN_TIME = 24 * 60 * 60 * 1000; // 24時間
+
+// リアクション用ガイドデータ（メッセージID → 単語情報）
+export const messageGuideData = new Map<
+  string,
+  {
+    hits: Array<{ id: number; titles?: Array<{ text: string }> }>;
+    wikiMatches: Array<{ id: number; term: string; meaning: string; link: string }>;
+  }
+>();
 
 // 形態素解析用のトークナイザー（グローバルで初期化、再利用）
 let tokenizer: any = null;
@@ -133,26 +137,7 @@ async function findWikiMatches(
   return matches;
 }
 
-function buildGuideButtons(
-  items: Array<{ id: number; label: string; type: "word" | "wiki" }>,
-) {
-  const rows: ActionRowBuilder<ButtonBuilder>[] = [];
 
-  for (let i = 0; i < items.length && i < 25; i += 5) {
-    const chunk = items.slice(i, i + 5);
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-      chunk.map((item) =>
-        new ButtonBuilder()
-          .setCustomId(`dict_${item.type}_${item.id}`)
-          .setLabel(item.label.substring(0, 80))
-          .setStyle(ButtonStyle.Primary),
-      ),
-    );
-    rows.push(row);
-  }
-
-  return rows;
-}
 
 export const handleMessage = async (message: Message) => {
   if (message.author.bot) return;
@@ -317,20 +302,8 @@ export const handleMessage = async (message: Message) => {
         );
       };
 
-      const wikiGuideButtons = buildGuideButtons(
-        availableWikiMatches.map((wikiWord) => ({
-          id: wikiWord.id,
-          label: wikiWord.term,
-          type: "wiki" as const,
-        })),
-      );
-
-      await message.reply({
-        content:
-          "解説を見る",
-        components: wikiGuideButtons,
-        allowedMentions: { repliedUser: false, parse: [] },
-      });
+      await message.react('📚').catch(() => undefined);
+      messageGuideData.set(message.id, { hits: [], wikiMatches: availableWikiMatches });
 
       setCooldownsForWiki();
       return;
@@ -354,25 +327,7 @@ export const handleMessage = async (message: Message) => {
       );
     };
 
-    const wordGuideButtons = buildGuideButtons(
-      hits.map((word) => ({
-        id: word.id,
-        label: `${
-          hitTitles.find((t) => t.wordId === word.id)?.text ||
-          word.titles?.[0]?.text ||
-          "詳細"
-        }${word.contextLabel ? ` · ${word.contextLabel}` : ""}`,
-        type: "word" as const,
-      })),
-    );
-
-    await message.reply({
-      content:
-        "解説を見る",
-      components: wordGuideButtons,
-      allowedMentions: { parse: [] },
-    });
-
+    await message.react('📚').catch(() => undefined);    messageGuideData.set(message.id, { hits, wikiMatches: [] });
     setCooldowns(); // 送信成功後にタイマーセット！
   } catch (error) {
     console.error("AutoResponse Error:", error);

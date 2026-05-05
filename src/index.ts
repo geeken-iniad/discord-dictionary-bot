@@ -1,5 +1,8 @@
 // src/index.ts
 import {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   Client,
   Colors,
   EmbedBuilder,
@@ -19,7 +22,7 @@ import {
 
 import * as commands from "./commands";
 import { normalizeTitleForComparison } from "./commands/add";
-import { handleMessage } from "./events/messageHandler";
+import { handleMessage, messageGuideData } from "./events/messageHandler";
 
 dotenv.config();
 
@@ -58,6 +61,63 @@ const commandMap: { [key: string]: (interaction: any) => Promise<void> } = {
 
 client.on(Events.MessageCreate, async (message) => {
   await handleMessage(message);
+});
+
+client.on(Events.MessageReactionAdd, async (reaction, user) => {
+  if (user.bot) return;
+  if (reaction.emoji.name !== '📚') return;
+
+  try {
+    const guideData = messageGuideData.get(reaction.message.id);
+    if (!guideData) return;
+
+    const { hits, wikiMatches } = guideData;
+
+    // ボタンを構築
+    const items: Array<{ id: number; label: string; type: "word" | "wiki" }> = [
+      ...hits.map((word) => ({
+        id: word.id,
+        label: word.titles?.[0]?.text || "詳細",
+        type: "word" as const,
+      })),
+      ...wikiMatches.map((wikiWord) => ({
+        id: wikiWord.id,
+        label: wikiWord.term,
+        type: "wiki" as const,
+      })),
+    ];
+
+    if (items.length === 0) return;
+
+    const rows: ActionRowBuilder<ButtonBuilder>[] = [];
+    for (let i = 0; i < items.length && i < 25; i += 5) {
+      const chunk = items.slice(i, i + 5);
+      const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        chunk.map((item) =>
+          new ButtonBuilder()
+            .setCustomId(`dict_${item.type}_${item.id}`)
+            .setLabel(item.label.substring(0, 80))
+            .setStyle(ButtonStyle.Primary),
+        ),
+      );
+      rows.push(row);
+    }
+
+    // ユーザーにのみ見える形でDM送信
+    await user.send({
+      content: `解説を選んでください：`,
+      components: rows,
+    }).catch(async () => {
+      // DM送信失敗時はリプライで対応
+      await reaction.message.reply({
+        content: `<@${user.id}> DM送信失敗。チャンネルに表示します：`,
+        components: rows,
+        allowedMentions: { parse: [] },
+      });
+    });
+  } catch (error) {
+    console.error("MessageReactionAdd Error:", error);
+  }
 });
 
 client.on(Events.InteractionCreate, async (interaction: Interaction) => {
